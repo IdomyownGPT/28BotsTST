@@ -1,0 +1,152 @@
+# SKI — Sephirotische Kernintelligenz
+# Docker Compose — All VM containers
+# Run: docker compose up -d
+# Verify: ./scripts/verify_all.sh
+
+version: "3.8"
+
+services:
+  # ── DeerFlow Super-Agent ──
+
+  deerflow-langgraph:
+    image: deerflow-langgraph:latest
+    container_name: ski-deerflow-langgraph
+    ports:
+      - "2024:2024"
+    environment:
+      - LM_STUDIO_BASE_URL=${SKI_LM_STUDIO_BASE_URL:-http://192.168.178.90:1234/v1}
+      - WORKERS=10
+    volumes:
+      - /mnt/28bots_core/Obsidian_Vault:/mnt/ski-vault:rw
+    mem_limit: 2g
+    restart: unless-stopped
+    networks:
+      - deer-flow
+
+  deerflow-gateway:
+    image: deerflow-gateway:latest
+    container_name: ski-deerflow-gateway
+    ports:
+      - "8001:8001"
+    environment:
+      - LM_STUDIO_BASE_URL=${SKI_LM_STUDIO_BASE_URL:-http://192.168.178.90:1234/v1}
+    mem_limit: 512m
+    restart: unless-stopped
+    networks:
+      - deer-flow
+
+  deerflow-frontend:
+    image: deerflow-frontend:latest
+    container_name: ski-deerflow-frontend
+    ports:
+      - "3100:3000"  # Remapped from 3000 to 3100 to avoid conflict with OpenClaw
+    mem_limit: 512m
+    restart: unless-stopped
+    networks:
+      - deer-flow
+
+  deerflow-nginx:
+    image: nginx:alpine
+    container_name: ski-deerflow-nginx
+    ports:
+      - "2026:2026"
+    volumes:
+      - ./config/nginx/deerflow.conf:/etc/nginx/conf.d/default.conf:ro
+    mem_limit: 256m
+    restart: unless-stopped
+    depends_on:
+      - deerflow-langgraph
+      - deerflow-frontend
+      - deerflow-gateway
+    networks:
+      - deer-flow
+
+  # ── OpenClaw — Telegram Bot + Tool Gateway ──
+
+  openclaw:
+    image: node:22
+    container_name: ski-openclaw
+    ports:
+      - "3000:3000"
+    environment:
+      - TELEGRAM_BOT_TOKEN=${SKI_TELEGRAM_BOT_TOKEN}
+      - LM_STUDIO_BASE_URL=${SKI_LM_STUDIO_BASE_URL:-http://192.168.178.90:1234/v1}
+    volumes:
+      - /mnt/28bots_core/Obsidian_Vault:/mnt/ski-vault:rw
+    mem_limit: 512m
+    restart: unless-stopped
+    networks:
+      - deer-flow
+
+  # ── Hermes Orchestrator ──
+
+  hermes:
+    image: ubuntu:22.04
+    container_name: ski-hermes
+    environment:
+      - HERMES_DEFAULT_PROFILE=${SKI_HERMES_DEFAULT_PROFILE:-tiferet-beta}
+      - LM_STUDIO_BASE_URL=${SKI_LM_STUDIO_BASE_URL:-http://192.168.178.90:1234/v1}
+    volumes:
+      - /mnt/28bots_core/Obsidian_Vault:/mnt/ski-vault:rw
+      - hermes-data:/var/lib/hermes
+    mem_limit: 1g
+    restart: unless-stopped
+    networks:
+      - deer-flow
+
+  # ── Agent Zero — Task Hierarchy ──
+
+  agent-zero:
+    image: frdel/agent-zero:latest
+    container_name: ski-agent-zero
+    ports:
+      - "8080:8080"
+    environment:
+      - LM_STUDIO_BASE_URL=${SKI_LM_STUDIO_BASE_URL:-http://192.168.178.90:1234/v1}
+    volumes:
+      - /mnt/28bots_core/Obsidian_Vault:/mnt/ski-vault:rw
+    mem_limit: 1g
+    restart: unless-stopped
+    networks:
+      - deer-flow
+
+  # ── Milvus Vector Database ──
+
+  milvus:
+    image: milvusdb/milvus:latest
+    container_name: ski-milvus
+    ports:
+      - "19530:19530"
+    volumes:
+      - milvus-data:/var/lib/milvus
+    mem_limit: 2g
+    restart: unless-stopped
+    networks:
+      - deer-flow
+
+# ── Networks ──
+
+networks:
+  deer-flow:
+    driver: bridge
+    name: docker_deer-flow
+
+# ── Volumes ──
+
+volumes:
+  hermes-data:
+  milvus-data:
+
+# ── Resource Notes ──
+# Total memory allocated: ~7.75 GB
+#   deerflow-langgraph:  2.0 GB
+#   deerflow-gateway:    0.5 GB
+#   deerflow-frontend:   0.5 GB
+#   deerflow-nginx:      0.25 GB
+#   openclaw:            0.5 GB
+#   hermes:              1.0 GB
+#   agent-zero:          1.0 GB
+#   milvus:              2.0 GB
+#
+# With 9GB VM RAM, ~1.25 GB remains for the OS. This is TIGHT.
+# RECOMMENDATION: Increase VM RAM to 16GB in Hyper-V settings.
