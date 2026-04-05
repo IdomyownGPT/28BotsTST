@@ -32,6 +32,7 @@
 - [ ] Hermes Milvus memory plugin configuration
 - [ ] Hermes credential pool setup for LM Studio multi-key rotation
 - [ ] Camofox browser integration (port 9377)
+- [ ] **Auto Research** — Setup and first overnight run (M12)
 
 ---
 
@@ -107,6 +108,18 @@
 - [ ] Backup and recovery tested
 - [ ] All 9 Hermes profiles validated
 
+### M12 — Auto Research (Karpathy-style experiment loop)
+- [ ] Install Python 3.10+ and uv on host
+- [ ] Run `07_setup_autoresearch.ps1` on host
+- [ ] Prepare training data (run `prepare.py`)
+- [ ] Run baseline experiment (verify GPU + training works)
+- [ ] Edit `program.md` with SKI-specific research directions
+- [ ] First overnight run (200 experiments)
+- [ ] Review results in Obsidian (`M12_AutoResearch/AutoResearch_Log.md`)
+- [ ] Integrate best findings into production model pipeline
+- [ ] Connect Auto Research results to Milvus for experiment embedding search
+- [ ] Hook into DeerFlow for triggering experiments via chat
+
 ---
 
 ## Next Actions (Priority Order)
@@ -117,3 +130,4 @@
 4. **Fix SMB fstab** — Add `x-systemd.automount`
 5. **Connect Telegram** — Wire up @MegamarphBot → OpenClaw → DeerFlow
 6. **Run verify_all.sh** — Fix any remaining failures
+7. **Setup Auto Research** — Run `07_setup_autoresearch.ps1`, first overnight run

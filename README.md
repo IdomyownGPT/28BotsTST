@@ -12,6 +12,7 @@
 | Agent Zero | Active (:8080) |
 | Milvus VDB | Active (:19530) |
 | Vault Mount | Active (SMB) |
+| Auto Research | New (M12 — Karpathy experiment loop) |
 | Telegram | Token ready, not connected |
 
 ## Architecture
@@ -27,7 +28,8 @@ Two-machine setup on LAN `192.168.178.0/24`:
 │    Bonsai Prism 8B (normal)  │     │  OpenClaw :3000              │
 │    Bonsai Prism 8B (Symbolect)     │  Hermes v0.7 (9 profiles)    │
 │    nomic-embed-text          │     │  Agent Zero :8080            │
-│  RTX 3060 · 12GB VRAM       │     │  Milvus :19530               │
+│  Auto Research (GPU loop)    │     │  Milvus :19530               │
+│  RTX 3060 · 12GB VRAM       │     │  AutoRes Monitor             │
 │                              │     │                              │
 │  Obsidian Vault ◄────SMB────►│  /mnt/28bots_core               │
 │  NAS 12TB                    │     │  Docker v29.3.1              │
@@ -64,10 +66,11 @@ Two-machine setup on LAN `192.168.178.0/24`:
 ./scripts/verify_all.sh
 
 # Run individual checks
-./scripts/verify_network.sh     # Ping, ports, connectivity
-./scripts/verify_docker.sh      # Containers, memory, disk
-./scripts/verify_lm_studio.sh   # Models, inference, embeddings
-./scripts/verify_vault.sh       # SMB mount, read/write, fstab
+./scripts/verify_network.sh        # Ping, ports, connectivity
+./scripts/verify_docker.sh         # Containers, memory, disk
+./scripts/verify_lm_studio.sh      # Models, inference, embeddings
+./scripts/verify_vault.sh          # SMB mount, read/write, fstab
+./scripts/verify_autoresearch.sh   # Auto Research status, experiment logs
 ```
 
 ## Models (Bonsai Prism 8B)
@@ -90,6 +93,29 @@ Instead of multiple large models, SKI uses **Bonsai Prism 8B** (<2GB VRAM per in
 | **Malkuth** | malkuth-alpha | malkuth-beta | malkuth-gamma |
 
 ★ = Default profile. Switch: `hermes -p [profile] chat`
+
+## Auto Research (Karpathy-style)
+
+Autonomous ML experiment loop running on the host GPU. Based on [karpathy/autoresearch](https://github.com/karpathy/autoresearch).
+
+```
+program.md → Agent (Bonsai Prism 8B) → Modify train.py → Train (5 min) → Evaluate val_bpb
+                                                                              │
+                                                                   Improved? Keep : Revert
+                                                                              │
+                                                                         Repeat ×100
+```
+
+- **Agent:** Bonsai Prism 8B via LM Studio (proposes code changes)
+- **Training:** RTX 3060 · CUDA · 5-minute wall-clock budget per experiment
+- **Steering:** Edit `program.md` in Obsidian to guide research direction
+- **Results:** Logged to vault (`SKI_Cookbook/M12_AutoResearch/`)
+
+```powershell
+# On the Windows host
+.\run_autoresearch.ps1                    # 100 experiments
+.\run_overnight.ps1                       # 200 experiments overnight
+```
 
 ## Known Issues
 
@@ -128,11 +154,18 @@ See [docs/DESIGN_ISSUES.md](docs/DESIGN_ISSUES.md) for full details.
 ├── scripts/
 │   ├── lib/common.sh          # Shared functions
 │   ├── verify_all.sh          # Run all checks
+│   ├── verify_autoresearch.sh # Auto Research status
 │   ├── verify_docker.sh
 │   ├── verify_lm_studio.sh
 │   ├── verify_network.sh
 │   └── verify_vault.sh
 └── src/
+    ├── autoresearch/
+    │   ├── config.py          # Configuration
+    │   ├── prepare.py         # Data preparation (never modified by agent)
+    │   ├── program.md         # Research directions (edit to steer)
+    │   ├── ski_runner.py      # Experiment loop (main entry point)
+    │   └── train.py           # Training code (modified by agent)
     └── components/
         └── SKIArchitecture.jsx # React visualization
 ```

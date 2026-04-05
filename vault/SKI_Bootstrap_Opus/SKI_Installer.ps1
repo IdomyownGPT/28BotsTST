@@ -19,7 +19,7 @@
 #>
 [CmdletBinding()]
 param(
-    [ValidateSet("Menu","FullInstall","SanityCheck","Step1","Step2","Step3","Step4","RemoteSetup")]
+    [ValidateSet("Menu","FullInstall","SanityCheck","Step1","Step2","Step3","Step4","Step5","RemoteSetup")]
     [string]$Mode          = "Menu",
     [string]$HostIP        = "192.168.178.90",
     [string]$VMIP          = "192.168.178.124",
@@ -29,7 +29,9 @@ param(
     [int]$LMStudioPort     = 1234,
     [string]$VaultPath     = "D:\28Bots_Core\Obsidian_Vault\root",
     [string]$VMName        = "28Bots-Orchestrator-GUI",
-    [string]$BootstrapPath = "/mnt/28bots_core/Obsidian_Vault/SKI_Bootstrap_Opus/vm"
+    [string]$BootstrapPath = "/mnt/28bots_core/Obsidian_Vault/SKI_Bootstrap_Opus/vm",
+    [string]$AutoResearchDir = "D:\28Bots_Core\AutoResearch",
+    [string]$AutoResearchModel = "bonsai-prism-8b"
 )
 
 # ═══════════════════════════════════════════════════════════════
@@ -50,6 +52,8 @@ $Config = @{
     VHDSize       = 120GB
     CPUCount      = 4
     BootstrapPath = $BootstrapPath
+    AutoResearchDir = $AutoResearchDir
+    AutoResearchModel = $AutoResearchModel
 }
 
 # ═══════════════════════════════════════════════════════════════
@@ -319,6 +323,120 @@ function Install-HyperVVM {
     Write-Host "    3. User: archat, hostname: 28bots-orchestrator" -ForegroundColor Gray
     Write-Host "    4. Static IP: $($Config.VMIP)" -ForegroundColor Gray
     Write-Host "    5. Install SSH: sudo apt install openssh-server" -ForegroundColor Gray
+    return $true
+}
+
+# ═══════════════════════════════════════════════════════════════
+# Step 5: Auto Research Setup
+# ═══════════════════════════════════════════════════════════════
+
+function Install-AutoResearch {
+    Write-Banner "Step 5: Auto Research (Karpathy-style experiment loop)"
+
+    $arDir = $Config.AutoResearchDir
+    $srcDir = "$arDir\src"
+    $logsDir = "$arDir\logs"
+    $vaultResultsDir = "$($Config.VaultPath)\SKI_Cookbook\M12_AutoResearch"
+
+    # Check Python
+    $python = Get-Command python -ErrorAction SilentlyContinue
+    if ($python) {
+        $pyVer = python --version 2>&1
+        Write-OK "Python: $pyVer"
+    } else {
+        Write-Host "  [ERROR] Python not found. Install Python 3.10+ from https://python.org" -ForegroundColor Red
+        return $false
+    }
+
+    # Check GPU
+    $nvSmi = Get-Command nvidia-smi -ErrorAction SilentlyContinue
+    if ($nvSmi) {
+        $gpu = nvidia-smi --query-gpu=name,memory.total --format=csv,noheader 2>&1
+        Write-OK "GPU: $gpu"
+    } else {
+        Write-Host "  [WARN] nvidia-smi not found — GPU training may not work" -ForegroundColor Yellow
+    }
+
+    # Create directories
+    foreach ($dir in @($arDir, $srcDir, $logsDir, "$arDir\backups", $vaultResultsDir)) {
+        if (-not (Test-Path $dir)) {
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+            Write-Created $dir
+        } else {
+            Write-OK $dir
+        }
+    }
+
+    # Create virtual environment
+    $venvDir = "$arDir\.venv"
+    if (Test-Path "$venvDir\Scripts\python.exe") {
+        Write-OK "Virtual environment exists"
+    } else {
+        Write-Info "Creating virtual environment..."
+        $uv = Get-Command uv -ErrorAction SilentlyContinue
+        if ($uv) {
+            uv venv $venvDir
+        } else {
+            python -m venv $venvDir
+        }
+        Write-Created "Virtual environment at $venvDir"
+    }
+
+    # Install dependencies
+    Write-Info "Installing dependencies..."
+    try {
+        & "$venvDir\Scripts\pip.exe" install torch numpy tiktoken openai --quiet 2>&1 | Out-Null
+        Write-OK "Dependencies installed"
+    } catch {
+        Write-Host "  [WARN] Some dependencies failed: $_" -ForegroundColor Yellow
+    }
+
+    # Copy source files from repo (if available)
+    $repoPaths = @(
+        "$PSScriptRoot\..\..\..\..\src\autoresearch",
+        "$env:USERPROFILE\28BotsTST\src\autoresearch",
+        "D:\28BotsTST\src\autoresearch"
+    )
+    $repoSrc = $null
+    foreach ($p in $repoPaths) {
+        if (Test-Path "$p\ski_runner.py") { $repoSrc = $p; break }
+    }
+
+    if ($repoSrc) {
+        foreach ($f in @("ski_runner.py","train.py","prepare.py","config.py","program.md")) {
+            if (Test-Path "$repoSrc\$f") {
+                Copy-Item "$repoSrc\$f" "$srcDir\$f" -Force
+                Write-OK "Copied $f"
+            }
+        }
+    } else {
+        Write-Info "Source files not found locally. Clone the repo and copy src/autoresearch/* to $srcDir"
+    }
+
+    # Create launcher scripts
+    $launcherContent = @"
+param([int]`$MaxExperiments = 100, [int]`$Budget = 300)
+`$env:SKI_LM_STUDIO_BASE_URL = "http://localhost:$($Config.LMStudioPort)/v1"
+`$env:SKI_AUTORESEARCH_MODEL = "$($Config.AutoResearchModel)"
+`$env:SKI_AUTORESEARCH_BUDGET = "`$Budget"
+`$env:SKI_AUTORESEARCH_MAX_EXPERIMENTS = "`$MaxExperiments"
+`$env:SKI_VAULT_PATH = "$($Config.VaultPath)"
+& "$venvDir\Scripts\python.exe" "$srcDir\ski_runner.py" --max-experiments `$MaxExperiments --budget `$Budget
+"@
+    Set-Content -Path "$arDir\run_autoresearch.ps1" -Value $launcherContent
+    Write-Created "run_autoresearch.ps1"
+
+    $overnightContent = @"
+`$ts = Get-Date -Format "yyyyMMdd_HHmmss"
+`$log = "$logsDir\overnight_`$ts.log"
+Write-Host "Overnight run — log: `$log" -ForegroundColor Cyan
+& "$arDir\run_autoresearch.ps1" -MaxExperiments 200 -Budget 300 2>&1 | Tee-Object -FilePath `$log
+"@
+    Set-Content -Path "$arDir\run_overnight.ps1" -Value $overnightContent
+    Write-Created "run_overnight.ps1"
+
+    Write-Host "`n  [DONE] Auto Research configured at $arDir" -ForegroundColor Green
+    Write-Host "  Quick start: cd $arDir && .\run_autoresearch.ps1 -MaxExperiments 10" -ForegroundColor Gray
     return $true
 }
 
@@ -601,6 +719,61 @@ function Invoke-SanityCheck {
         Write-Warn "SSH client not found — skipping SSH checks"
     }
 
+    # ── 9. Auto Research ──
+    Write-Banner "9. Auto Research"
+    $arDir = $Config.AutoResearchDir
+    if (Test-Path $arDir) {
+        Write-Pass "Auto Research directory: $arDir"
+
+        if (Test-Path "$arDir\.venv\Scripts\python.exe") {
+            Write-Pass "Python venv exists"
+        } else {
+            Write-Warn "Python venv not found at $arDir\.venv"
+        }
+
+        if (Test-Path "$arDir\src\ski_runner.py") {
+            Write-Pass "Source files present"
+        } else {
+            Write-Warn "Source files missing at $arDir\src\"
+        }
+
+        if (Test-Path "$arDir\run_autoresearch.ps1") {
+            Write-Pass "Launcher script exists"
+        } else {
+            Write-Warn "Launcher script missing"
+        }
+
+        # Check for experiment results
+        $vaultResults = "$($Config.VaultPath)\SKI_Cookbook\M12_AutoResearch\results.jsonl"
+        if (Test-Path $vaultResults) {
+            $lines = (Get-Content $vaultResults | Measure-Object -Line).Lines
+            $kept = (Select-String -Path $vaultResults -Pattern '"kept": true' -SimpleMatch | Measure-Object).Count
+            Write-Pass "Experiments: $lines total ($kept kept)"
+
+            # Show latest
+            $latest = Get-Content $vaultResults | Select-Object -Last 1
+            if ($latest) {
+                try {
+                    $exp = $latest | ConvertFrom-Json
+                    Write-Info "Latest: val_bpb=$($exp.val_bpb) — $($exp.description)"
+                } catch {}
+            }
+        } else {
+            Write-Info "No experiments run yet"
+        }
+
+        # GPU check
+        if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {
+            $gpuMem = nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader 2>&1
+            Write-Pass "GPU: $gpuMem"
+        } else {
+            Write-Warn "nvidia-smi not available"
+        }
+    } else {
+        Write-Warn "Auto Research not set up ($arDir not found)"
+        Write-Info "Run Step 5 or 07_setup_autoresearch.ps1 to set up"
+    }
+
     # ── Summary ──
     $result = Show-Summary "Sanity Check"
     return $result
@@ -620,6 +793,7 @@ function Show-StepMenu {
         Write-Host "  |  2. Setup SMB Share + skiuser                 |" -ForegroundColor White
         Write-Host "  |  3. Configure Firewall Rules                  |" -ForegroundColor White
         Write-Host "  |  4. Create Hyper-V VM                         |" -ForegroundColor White
+        Write-Host "  |  5. Setup Auto Research                       |" -ForegroundColor White
         Write-Host "  |  B. Back                                      |" -ForegroundColor Gray
         Write-Host "  +----------------------------------------------+" -ForegroundColor DarkCyan
 
@@ -629,6 +803,7 @@ function Show-StepMenu {
             "2" { Install-SMBShare | Out-Null }
             "3" { Install-FirewallRules | Out-Null }
             "4" { Install-HyperVVM | Out-Null }
+            "5" { Install-AutoResearch | Out-Null }
             "B" { return }
             "b" { return }
             default { Write-Host "  Invalid selection." -ForegroundColor Red }
@@ -649,7 +824,7 @@ function Show-MainMenu {
         Write-Host "  +----------------------------------------------+" -ForegroundColor DarkCyan
         Write-Host "  |              Main Menu                        |" -ForegroundColor DarkCyan
         Write-Host "  +----------------------------------------------+" -ForegroundColor DarkCyan
-        Write-Host "  |  1. Full Install (Steps 1-4)                  |" -ForegroundColor White
+        Write-Host "  |  1. Full Install (Steps 1-5)                  |" -ForegroundColor White
         Write-Host "  |  2. Sanity Check (Verify Everything)          |" -ForegroundColor White
         Write-Host "  |  3. Individual Steps  >>>                     |" -ForegroundColor White
         Write-Host "  |  4. Remote VM Setup (SSH)                     |" -ForegroundColor White
@@ -667,6 +842,7 @@ function Show-MainMenu {
                     if ($ok) { $ok = Install-SMBShare }
                     if ($ok) { $ok = Install-FirewallRules }
                     if ($ok) { $ok = Install-HyperVVM }
+                    if ($ok) { $ok = Install-AutoResearch }
                     if ($ok) {
                         Write-Host "`n  Full install complete." -ForegroundColor Green
                         if (Confirm-Proceed "Run sanity check now?") { Invoke-SanityCheck | Out-Null }
@@ -697,12 +873,14 @@ switch ($Mode) {
         Install-SMBShare | Out-Null
         Install-FirewallRules | Out-Null
         Install-HyperVVM | Out-Null
+        Install-AutoResearch | Out-Null
     }
     "SanityCheck"  { Invoke-SanityCheck | Out-Null }
     "Step1"        { Install-Directories | Out-Null }
     "Step2"        { Install-SMBShare | Out-Null }
     "Step3"        { Install-FirewallRules | Out-Null }
     "Step4"        { Install-HyperVVM | Out-Null }
+    "Step5"        { Install-AutoResearch | Out-Null }
     "RemoteSetup"  { Invoke-RemoteVMSetup | Out-Null }
     "Menu"         { Show-MainMenu }
 }
