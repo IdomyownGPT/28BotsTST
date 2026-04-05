@@ -28,6 +28,7 @@ The SKI system spans two machines on the same LAN subnet `192.168.178.0/24`:
 | 3100 | DeerFlow Frontend (Next.js) | deerflow-frontend | Active | **Moved from 3000 to resolve conflict** |
 | 8001 | DeerFlow Gateway | deerflow-gateway | **Config Issue** | Needs config-path fix |
 | 8080 | Agent Zero | agent-zero | Active | |
+| 9377 | Hermes Camofox Browser | hermes | Active | **New in v0.7** — anti-detection browser with VNC |
 | 19530 | Milvus Vector DB | milvus | Active | gRPC |
 
 > **Port 3000 conflict resolved:** DeerFlow Frontend was originally on port 3000, conflicting with OpenClaw. DeerFlow Frontend has been moved to port 3100.

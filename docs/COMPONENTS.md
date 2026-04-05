@@ -104,20 +104,31 @@ curl -sf http://localhost:3000/health
 
 | Property | Value |
 |----------|-------|
-| Port | None exposed |
+| Port | None exposed (9377 for Camofox browser) |
 | Image | ubuntu:22.04 |
-| Version | v0.6.0 |
+| Version | v0.7.0 |
 | Profiles | 9 (3×3 matrix) |
 | Default | tiferet-beta |
 | Status | Active |
 
 **Role:** Memory and learning orchestrator. Manages the cognitive architecture via 9 switchable profiles organized in the Hermes 3×3 matrix.
 
+**New in v0.7.0:**
+- **Pluggable Memory Provider** — can integrate Milvus as external memory backend via plugin system
+- **Credential Pools** — multiple API keys per provider with automatic rotation and failover
+- **Camofox Browser** — anti-detection browser with persistent sessions and VNC debugging (port 9377)
+- **Gateway Hardening** — race condition fixes, approval routing, flood control
+- **Secret Exfiltration Blocking** — scans URLs and responses for leaked secrets
+- **MCP Server support** — editor integrations (VS Code, Zed, JetBrains) register as tool providers
+- **Session Continuity** — persistent sessions via `X-Hermes-Session-Id`, streaming tool progress
+- **New CLI commands:** `/yolo` (toggle auto-approve), `/btw` (side questions), `/profile` (show active profile), `--max-turns` flag
+
 **Profile switching:**
 ```bash
 hermes -p kether-alpha chat    # High-level generation
 hermes -p tiferet-beta chat    # Default: balanced orchestration
 hermes -p malkuth-gamma chat   # Ground-level execution
+hermes -p tiferet-beta --max-turns 5 chat  # Limit iterations (new in 0.7)
 ```
 
 See [ARCHITECTURE.md](ARCHITECTURE.md#hermes-3×3-harness-matrix) for the full matrix.

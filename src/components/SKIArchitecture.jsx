@@ -184,7 +184,7 @@ export default function SKIArchitecture() {
               <Item label="GPU" value="Software Rendering (no CUDA)" color={COLORS.red} icon="&#10060;" />
               <Item label="Disk" value="107 GB | 62GB free" icon="&#128191;" />
               <Item label="Docker" value="v29.3.1" color={COLORS.green} icon="&#128051;" />
-              <Item label="Hermes" value="v0.6.0 | 9 Profiles" color={COLORS.green} icon="&#129504;" />
+              <Item label="Hermes" value="v0.7.0 | 9 Profiles" color={COLORS.green} icon="&#129504;" />
               <div style={{ marginTop: 8, background: "#7c3aed11", borderRadius: 6, padding: 8 }}>
                 <div style={{ color: "#a78bfa", fontSize: 10, marginBottom: 4 }}>VAULT MOUNT</div>
                 <Item label="local" value="/mnt/28bots_core/Obsidian_Vault/" color="#34d399" icon="&#128193;" />

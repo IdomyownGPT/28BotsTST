@@ -7,7 +7,7 @@
 | LM Studio | Active (Bonsai Prism 8B x2 + nomic-embed-text) |
 | DeerFlow UI | Active (:2026) |
 | DeerFlow Gateway | Config issue (:8001) |
-| Hermes (9 profiles) | Active |
+| Hermes v0.7.0 (9 profiles) | Active (:9377 Camofox) |
 | OpenClaw | Active (:3000) |
 | Agent Zero | Active (:8080) |
 | Milvus VDB | Active (:19530) |
@@ -25,7 +25,7 @@ Two-machine setup on LAN `192.168.178.0/24`:
 │                              │     │                              │
 │  LM Studio :1234             │◄────│  DeerFlow :2026              │
 │    Bonsai Prism 8B (normal)  │     │  OpenClaw :3000              │
-│    Bonsai Prism 8B (Symbolect)     │  Hermes (9 profiles)         │
+│    Bonsai Prism 8B (Symbolect)     │  Hermes v0.7 (9 profiles)    │
 │    nomic-embed-text          │     │  Agent Zero :8080            │
 │  RTX 3060 · 12GB VRAM       │     │  Milvus :19530               │
 │                              │     │                              │
@@ -54,6 +54,7 @@ Two-machine setup on LAN `192.168.178.0/24`:
 | 3100 | DeerFlow Frontend | VM | Active |
 | 8001 | DeerFlow Gateway | VM | Config Issue |
 | 8080 | Agent Zero | VM | Active |
+| 9377 | Hermes Camofox Browser | VM | New (v0.7) |
 | 19530 | Milvus VDB | VM | Active |
 
 ## Quick Verification

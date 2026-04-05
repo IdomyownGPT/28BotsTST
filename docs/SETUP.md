@@ -145,12 +145,25 @@ Log out and back in for group changes to take effect.
 
 ## Step 7: VM — Hermes Setup
 
-1. Install Hermes v0.6.0 (follow Hermes documentation)
+1. Install Hermes v0.7.0 (follow Hermes documentation)
 2. Configure 9 profiles:
    ```bash
    # The profiles are: kether-{alpha,beta,gamma}, tiferet-{alpha,beta,gamma}, malkuth-{alpha,beta,gamma}
    hermes profiles list
    hermes -p tiferet-beta chat   # Test default profile
+   ```
+3. New in v0.7.0 — optional advanced setup:
+   ```bash
+   # Configure Milvus as pluggable memory provider
+   hermes config set memory.provider milvus
+   hermes config set memory.milvus_host localhost
+   hermes config set memory.milvus_port 19530
+
+   # Configure credential pool for LM Studio
+   hermes config set providers.lm_studio.credentials '[{"api_key":"sk-1"},{"api_key":"sk-2"}]'
+
+   # Install Camofox browser (port 9377)
+   hermes tools install camofox
    ```
 
 ## Step 8: Telegram Bot
