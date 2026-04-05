@@ -25,7 +25,7 @@ SKI (Sephirotische Kernintelligenz / Sephirotic Core Intelligence) is a local, s
 │  │  │  Obsidian_Vault\    │  │     │  └───────────────────────┘ │ │
 │  │  └─────────────────────┘  │     │  ┌───────────────────────┐ │ │
 │  │                           │     │  │  Hermes Orchestrator  │ │ │
-│  │  ┌─────────────────────┐  │     │  │  9 Profiles · v0.6.0  │ │ │
+│  │  ┌─────────────────────┐  │     │  │  9 Profiles · v0.7.0  │ │ │
 │  │  │  NAS 12TB · 1Gbit   │  │     │  └───────────────────────┘ │ │
 │  │  └─────────────────────┘  │     │  ┌───────────────────────┐ │ │
 │  │                           │     │  │  Agent Zero :8080     │ │ │

@@ -15,7 +15,7 @@ if command -v hermes &>/dev/null; then
 else
     echo "[INFO] Hermes CLI not found in PATH."
     echo "  If Hermes runs inside a Docker container, this is expected."
-    echo "  Otherwise, install Hermes v0.6.0 following the Hermes documentation."
+    echo "  Otherwise, install Hermes v0.7.0 following the Hermes documentation."
     echo ""
 fi
 

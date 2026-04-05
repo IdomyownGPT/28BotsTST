@@ -6,7 +6,7 @@
 - [x] LM Studio running on host with API access
 - [x] Hyper-V VM (Ubuntu 24.04) configured
 - [x] Docker v29.3.1 with 8 containers
-- [x] Hermes v0.6.0 with 9 profiles
+- [x] Hermes v0.7.0 with 9 profiles (upgraded from v0.6.0)
 - [x] DeerFlow UI accessible at :2026
 - [x] OpenClaw container running
 - [x] Agent Zero container running
@@ -20,6 +20,7 @@
 - [ ] **VM RAM** — Increase from 9GB to 16GB
 - [ ] **SMB mount** — Add `x-systemd.automount` to fstab
 - [ ] **Bonsai Prism 8B** — Load both instances in LM Studio (normal + Symbolect)
+- [ ] **Hermes 0.7 integration** — Configure pluggable memory provider (Milvus), credential pools, Camofox port 9377
 
 ### Not Started
 - [ ] Symbolect/Runes training (M03)
@@ -28,6 +29,9 @@
 - [ ] Hindsight VectorDB integration
 - [ ] Backup automation
 - [ ] Monitoring dashboard
+- [ ] Hermes Milvus memory plugin configuration
+- [ ] Hermes credential pool setup for LM Studio multi-key rotation
+- [ ] Camofox browser integration (port 9377)
 
 ---
 

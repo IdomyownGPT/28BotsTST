@@ -78,18 +78,24 @@ services:
     networks:
       - deer-flow
 
-  # ── Hermes Orchestrator ──
+  # ── Hermes Orchestrator (v0.7.0) ──
 
   hermes:
     image: ubuntu:22.04
     container_name: ski-hermes
+    ports:
+      - "9377:9377"  # Camofox anti-detection browser (new in v0.7)
     environment:
       - HERMES_DEFAULT_PROFILE=${SKI_HERMES_DEFAULT_PROFILE:-tiferet-beta}
       - LM_STUDIO_BASE_URL=${SKI_LM_STUDIO_BASE_URL:-http://192.168.178.90:1234/v1}
+      - HERMES_MEMORY_PROVIDER=${SKI_HERMES_MEMORY_PROVIDER:-built-in}
+      - HERMES_MILVUS_HOST=ski-milvus
+      - HERMES_MILVUS_PORT=19530
+      - CAMOFOX_PORT=9377
     volumes:
       - /mnt/28bots_core/Obsidian_Vault:/mnt/ski-vault:rw
       - hermes-data:/var/lib/hermes
-    mem_limit: 1g
+    mem_limit: 1536m
     restart: unless-stopped
     networks:
       - deer-flow
@@ -138,15 +144,17 @@ volumes:
   milvus-data:
 
 # ── Resource Notes ──
-# Total memory allocated: ~7.75 GB
+# Total memory allocated: ~8.25 GB
 #   deerflow-langgraph:  2.0 GB
 #   deerflow-gateway:    0.5 GB
 #   deerflow-frontend:   0.5 GB
 #   deerflow-nginx:      0.25 GB
 #   openclaw:            0.5 GB
-#   hermes:              1.0 GB
+#   hermes:              1.5 GB  (increased for v0.7 Camofox + memory plugins)
 #   agent-zero:          1.0 GB
 #   milvus:              2.0 GB
 #
-# With 9GB VM RAM, ~1.25 GB remains for the OS. This is TIGHT.
+# With 9GB VM RAM, ~0.75 GB remains for the OS. INSUFFICIENT.
 # RECOMMENDATION: Increase VM RAM to 16GB in Hyper-V settings.
+#
+# Hermes v0.7 new port: 9377 (Camofox anti-detection browser)
