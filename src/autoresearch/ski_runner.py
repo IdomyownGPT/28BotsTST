@@ -111,8 +111,8 @@ def agent_propose_change(
     desc_match = re.search(r"DESCRIPTION:\s*(.+)", reply)
     description = desc_match.group(1).strip() if desc_match else "Unknown change"
 
-    # Parse code block
-    code_match = re.search(r"```python\n(.*?)```", reply, re.DOTALL)
+    # Parse code block (tolerant to missing 'python' language tag and different line endings)
+    code_match = re.search(r"```(?:python)?\s*\n(.*?)```", reply, re.DOTALL)
     if code_match:
         new_code = code_match.group(1).strip()
     else:

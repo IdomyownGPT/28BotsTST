@@ -17,18 +17,20 @@ LOG_DIR = BASE_DIR / "logs"
 RESULTS_FILE = LOG_DIR / "results.jsonl"
 
 # ── Vault integration ──
-# When running on the host, the vault is at D:\28Bots_Core\Obsidian_Vault\root
-# Results are symlinked/copied there for Obsidian visibility
+# Ops run strictly inside the VM.
+# Default VM path for the vault is /mnt/28bots_core/Obsidian_Vault/root
+default_vault = "/mnt/28bots_core/Obsidian_Vault/root" if os.name != "nt" else r"D:\28Bots_Core\Obsidian_Vault\root"
 VAULT_PATH = Path(os.environ.get(
     "SKI_AUTORESEARCH_VAULT",
-    os.environ.get("SKI_VAULT_PATH", r"D:\28Bots_Core\Obsidian_Vault\root")
+    os.environ.get("SKI_VAULT_PATH", default_vault)
 ))
 VAULT_RESULTS_DIR = VAULT_PATH / "SKI_Cookbook" / "M12_AutoResearch"
 
-# ── LM Studio (Agent LLM) ──
+# ── LM Studio (Agent LLM - running on Host) ──
+# Default host IP is used to reach out from the VM to Windows
 LM_STUDIO_BASE_URL = os.environ.get(
     "SKI_LM_STUDIO_BASE_URL",
-    "http://localhost:1234/v1"
+    "http://192.168.178.90:1234/v1"
 )
 AGENT_MODEL = os.environ.get("SKI_AUTORESEARCH_MODEL", "bonsai-prism-8b")
 

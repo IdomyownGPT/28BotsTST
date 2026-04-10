@@ -18,6 +18,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from pathlib import Path
 
+import config  # NEU: Config importieren für das dynamische Budget
+
 # ── Import data loader from prepare.py ──
 from prepare import load_tokens, VOCAB_SIZE
 
@@ -235,9 +237,9 @@ def train():
     t0 = time.time()
 
     for it in range(MAX_ITERS):
-        # Check wall-clock budget
+        # Check wall-clock budget dynamically
         elapsed = time.time() - t0
-        if elapsed > 300:  # 5-minute hard limit
+        if elapsed > config.WALL_CLOCK_BUDGET_SEC:
             print(f"\n[budget] Wall-clock limit reached at iter {it} ({elapsed:.0f}s)")
             break
 
