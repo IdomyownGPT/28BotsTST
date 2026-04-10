@@ -191,6 +191,20 @@ Um die Ubuntu-VM vollständig zu provisionieren (inkl. Docker, SMB-Mounts, Conta
 
 Das Skript führt dich interaktiv durch alle nötigen Schritte und fragt Root-Rechte nur dann an, wenn sie explizit benötigt werden.
 
+### Schnellstart für Windows (Ohne Git)
+
+1. Lade die Datei `SKI_Deployment_Pack.zip` direkt hier aus dem Repository herunter.
+2. Entpacke die ZIP-Datei auf deinem Windows-Host (z.B. nach `C:\SKI_Setup`).
+3. Öffne PowerShell als Administrator und navigiere in den Ordner:
+   ```powershell
+   cd "C:\SKI_Setup\vault\SKI_Bootstrap_Opus\host\"
+   Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process
+   ```
+4. Führe das Setup-Skript aus:
+   ```powershell
+   .\06_ssh_vm_setup.ps1
+   ```
+
 ### Manuelle Installation
 
 ```bash
