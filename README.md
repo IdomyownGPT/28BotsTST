@@ -172,6 +172,27 @@ See [docs/DESIGN_ISSUES.md](docs/DESIGN_ISSUES.md) for full details.
 
 ## Getting Started
 
+### Automatische Installation (Empfohlen)
+
+Um die Ubuntu-VM vollständig zu provisionieren (inkl. Docker, SMB-Mounts, Container und Hermes), nutze das mitgelieferte Master-Skript.
+
+1. Navigiere in den VM-Bootstrap-Ordner:
+   ```bash
+   cd vault/SKI_Bootstrap_Opus/vm/
+   ```
+2. Mache das Master-Skript ausführbar:
+   ```bash
+   chmod +x install_ski_vm.sh
+   ```
+3. Führe das Skript **als normaler User (nicht als root/sudo)** aus:
+   ```bash
+   ./install_ski_vm.sh
+   ```
+
+Das Skript führt dich interaktiv durch alle nötigen Schritte und fragt Root-Rechte nur dann an, wenn sie explizit benötigt werden.
+
+### Manuelle Installation
+
 ```bash
 # Clone
 git clone https://github.com/IdomyownGPT/28BotsTST.git

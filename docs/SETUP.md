@@ -67,104 +67,32 @@ Step-by-step instructions for setting up the SKI system from scratch.
    - User: `archat`
    - Set static IP: 192.168.178.124
 
-3. Post-install:
-   ```bash
-   sudo apt update && sudo apt upgrade -y
-   sudo apt install -y cifs-utils curl jq netcat-openbsd
-   ```
+## Step 4: VM — Automatische Provisionierung (Empfohlen)
 
-## Step 4: VM — SMB Mount
-
-1. Create credentials file:
-   ```bash
-   sudo bash -c 'cat > /etc/smbcredentials << EOF
-   username=skiuser
-   password=YOUR_PASSWORD_HERE
-   EOF'
-   sudo chmod 600 /etc/smbcredentials
-   ```
-
-2. Create mount point:
-   ```bash
-   sudo mkdir -p /mnt/28bots_core
-   ```
-
-3. Add to `/etc/fstab`:
-   ```
-   //192.168.178.90/SKI-Vault-Root  /mnt/28bots_core  cifs  credentials=/etc/smbcredentials,_netdev,x-systemd.automount,x-systemd.mount-timeout=30,vers=3.0,uid=1000,gid=1000  0  0
-   ```
-
-4. Mount and verify:
-   ```bash
-   sudo mount -a
-   ls /mnt/28bots_core/Obsidian_Vault/
-   ```
-
-## Step 5: VM — Docker Installation
+Das Master-Skript `install_ski_vm.sh` führt die komplette VM-Einrichtung interaktiv durch:
+Basis-System, SMB-Mount, Docker, Container-Deployment, Hermes-Konfiguration und Verifikation.
 
 ```bash
-# Install Docker
-curl -fsSL https://get.docker.com | sudo sh
-sudo usermod -aG docker archat
-
-# Install Docker Compose plugin
-sudo apt install -y docker-compose-plugin
-
-# Verify
-docker --version
-docker compose version
+cd vault/SKI_Bootstrap_Opus/vm/
+chmod +x install_ski_vm.sh
+./install_ski_vm.sh
 ```
 
-Log out and back in for group changes to take effect.
+Das Skript ruft nacheinander die Einzelskripte auf:
 
-## Step 6: VM — Deploy Containers
+| Skript | Beschreibung | Berechtigung |
+|--------|-------------|-------------|
+| `01_setup_base.sh` | Pakete, User, Hostname, Timezone, Static IP, SSH, linux-azure | sudo |
+| `02_setup_smb_mount.sh` | SMB-Credentials, fstab, Mount-Verifikation | sudo |
+| `03_setup_docker.sh` | Docker Engine, Compose, docker-Gruppe | sudo |
+| `04_deploy_containers.sh` | Git-Repo, .env, `docker compose up -d` | User (sg docker) |
+| `05_setup_hermes.sh` | 3x3 Profile, Milvus-Memory, Camofox | User (sg docker) |
+| `06_verify_vm.sh` | Read-only Systemcheck aller Komponenten | User |
 
-1. Clone this repository:
-   ```bash
-   git clone https://github.com/IdomyownGPT/28BotsTST.git
-   cd 28BotsTST
-   ```
+Jeder Schritt folgt dem Muster: **CHECK → REPORT → ASK → ACT → VERIFY**.
+Es wird nichts verändert ohne vorherige Prüfung und Benutzerbestätigung.
 
-2. Configure environment:
-   ```bash
-   cp .env.example .env
-   # Edit .env with your values (especially Telegram bot token)
-   nano .env
-   ```
-
-3. Start all containers:
-   ```bash
-   docker compose up -d
-   ```
-
-4. Verify:
-   ```bash
-   docker compose ps
-   ./scripts/verify_all.sh
-   ```
-
-## Step 7: VM — Hermes Setup
-
-1. Install Hermes v0.7.0 (follow Hermes documentation)
-2. Configure 9 profiles:
-   ```bash
-   # The profiles are: kether-{alpha,beta,gamma}, tiferet-{alpha,beta,gamma}, malkuth-{alpha,beta,gamma}
-   hermes profiles list
-   hermes -p tiferet-beta chat   # Test default profile
-   ```
-3. New in v0.7.0 — optional advanced setup:
-   ```bash
-   # Configure Milvus as pluggable memory provider
-   hermes config set memory.provider milvus
-   hermes config set memory.milvus_host localhost
-   hermes config set memory.milvus_port 19530
-
-   # Configure credential pool for LM Studio
-   hermes config set providers.lm_studio.credentials '[{"api_key":"sk-1"},{"api_key":"sk-2"}]'
-
-   # Install Camofox browser (port 9377)
-   hermes tools install camofox
-   ```
+> **Hinweis:** Das `sg docker`-Kommando umgeht die Logout/Login-Anforderung nach dem Hinzufügen zur Docker-Gruppe.
 
 ## Step 8: Auto Research (Host)
 
