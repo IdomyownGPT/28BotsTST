@@ -2,7 +2,9 @@
 # ═══════════════════════════════════════════════════════════════
 # SKI — 05_setup_hermes.sh — Interactive Hermes profile setup
 #
-# Configures: Hermes container, profile matrix, memory provider
+# Configures: Hermes Agent container, profile matrix
+#
+# Memory: Obsidian vault on host (no Milvus)
 #
 # Run as regular user (archat).
 #
@@ -12,40 +14,53 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/00_lib.sh"
 
-show_banner "Hermes Orchestrator" "v0.7.0 — 3x3 Profile Matrix, Camofox, Milvus Memory"
+show_banner "Hermes Agent Setup" "v0.8.0 — 3x3 Profile Matrix"
 
 # ── Defaults ──
-DEF_REPO_DIR="$HOME/28BotsTST"
+DEF_RUNTIME_DIR="$HOME/28Bots_Runtime"
+DEF_RUNTIME_SMB="/mnt/28bots_core/runtime"
 DEF_DEFAULT_PROFILE="tiferet-beta"
+HERMES_CONTAINER="ski-hermes-agent"
+
+# Find runtime directory
+RUNTIME_DIR=""
+if [[ -d "$DEF_RUNTIME_DIR" && -f "$DEF_RUNTIME_DIR/docker-compose.yml" ]]; then
+    RUNTIME_DIR="$DEF_RUNTIME_DIR"
+elif [[ -d "$DEF_RUNTIME_SMB" && -f "$DEF_RUNTIME_SMB/docker-compose.yml" ]]; then
+    RUNTIME_DIR="$DEF_RUNTIME_SMB"
+else
+    warn "Runtime directory not found at $DEF_RUNTIME_DIR or $DEF_RUNTIME_SMB"
+    RUNTIME_DIR=$(ask_input "Runtime directory path" "$DEF_RUNTIME_DIR")
+fi
 
 # ═══════════════════════════════════════════════════════════════
 # 1. Hermes container status
 # ═══════════════════════════════════════════════════════════════
 
-header "Hermes Container"
+header "Hermes Agent Container"
 
 HERMES_RUNNING=false
-if docker ps --format '{{.Names}}' 2>/dev/null | grep -q ski-hermes; then
-    HERMES_STATUS=$(docker inspect ski-hermes --format '{{.State.Status}}' 2>/dev/null)
-    ok "Hermes container is $HERMES_STATUS"
+if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "$HERMES_CONTAINER"; then
+    HERMES_STATUS=$(docker inspect "$HERMES_CONTAINER" --format '{{.State.Status}}' 2>/dev/null)
+    ok "Hermes Agent container is $HERMES_STATUS"
     HERMES_RUNNING=true
-elif docker ps -a --format '{{.Names}}' 2>/dev/null | grep -q ski-hermes; then
-    HERMES_STATUS=$(docker inspect ski-hermes --format '{{.State.Status}}' 2>/dev/null)
-    warn "Hermes container exists but is $HERMES_STATUS"
-    if ask_yn "Start Hermes container?"; then
-        cd "$DEF_REPO_DIR" 2>/dev/null && docker compose up -d hermes
-        ok "Hermes container started"
+elif docker ps -a --format '{{.Names}}' 2>/dev/null | grep -q "$HERMES_CONTAINER"; then
+    HERMES_STATUS=$(docker inspect "$HERMES_CONTAINER" --format '{{.State.Status}}' 2>/dev/null)
+    warn "Hermes Agent container exists but is $HERMES_STATUS"
+    if ask_yn "Start Hermes Agent container?"; then
+        cd "$RUNTIME_DIR" 2>/dev/null && docker compose up -d hermes-agent
+        ok "Hermes Agent container started"
         HERMES_RUNNING=true
     fi
 else
-    warn "Hermes container not found"
+    warn "Hermes Agent container not found"
     info "Deploy containers first (04_deploy_containers.sh)"
-    if [[ -d "$DEF_REPO_DIR" ]] && ask_yn "Deploy Hermes container now?"; then
-        cd "$DEF_REPO_DIR" && docker compose up -d hermes
-        ok "Hermes container deployed"
+    if [[ -d "$RUNTIME_DIR" ]] && ask_yn "Deploy Hermes Agent container now?"; then
+        cd "$RUNTIME_DIR" && docker compose up -d hermes-agent
+        ok "Hermes Agent container deployed"
         HERMES_RUNNING=true
     else
-        skip "Hermes container"
+        skip "Hermes Agent container"
     fi
 fi
 
@@ -75,7 +90,7 @@ echo ""
 header "Default Profile"
 
 # Read current from .env
-ENV_FILE="$DEF_REPO_DIR/.env"
+ENV_FILE="$RUNTIME_DIR/.env"
 CURRENT_PROFILE="$DEF_DEFAULT_PROFILE"
 if [[ -f "$ENV_FILE" ]]; then
     CURRENT_PROFILE=$(grep -oP 'SKI_HERMES_DEFAULT_PROFILE=\K.*' "$ENV_FILE" 2>/dev/null || echo "$DEF_DEFAULT_PROFILE")
@@ -115,65 +130,23 @@ else
 fi
 
 # ═══════════════════════════════════════════════════════════════
-# 4. Milvus Memory Provider
+# 4. Memory — Obsidian Vault on Host
 # ═══════════════════════════════════════════════════════════════
 
-header "Memory Provider — Milvus Integration"
+header "Memory Provider — Obsidian Vault"
 
-# Check Milvus container
-MILVUS_RUNNING=false
-if docker ps --format '{{.Names}}' 2>/dev/null | grep -q ski-milvus; then
-    ok "Milvus container is running"
-    if check_port_open localhost 19530; then
-        ok "Milvus port 19530 is open"
-        MILVUS_RUNNING=true
-    else
-        warn "Milvus container running but port 19530 not responding"
-    fi
+VAULT_MOUNT="${SKI_VAULT_MOUNT:-/mnt/28bots_core}"
+if check_mount_active "$VAULT_MOUNT"; then
+    ok "Vault mounted at $VAULT_MOUNT"
+    info "Memory is managed via Obsidian vault on the Windows host"
+    info "Hermes reads/writes memory through the shared mount"
 else
-    warn "Milvus container not running"
-fi
-
-# Read current memory provider from .env
-CURRENT_MEM="built-in"
-if [[ -f "$ENV_FILE" ]]; then
-    CURRENT_MEM=$(grep -oP 'SKI_HERMES_MEMORY_PROVIDER=\K.*' "$ENV_FILE" 2>/dev/null || echo "built-in")
-fi
-info "Current memory provider: $CURRENT_MEM"
-
-if [[ "$MILVUS_RUNNING" == "true" ]]; then
-    if [[ "$CURRENT_MEM" == "milvus" ]]; then
-        ok "Milvus already configured as memory provider"
-    else
-        if ask_yn "Enable Milvus as Hermes memory provider? (currently: $CURRENT_MEM)" "N"; then
-            if [[ -f "$ENV_FILE" ]]; then
-                sed -i "s|SKI_HERMES_MEMORY_PROVIDER=.*|SKI_HERMES_MEMORY_PROVIDER=milvus|" "$ENV_FILE"
-                ok "Memory provider set to 'milvus' in .env"
-                warn "Restart Hermes to apply: docker compose restart hermes"
-            fi
-        else
-            ok "Keeping memory provider: $CURRENT_MEM"
-        fi
-    fi
-else
-    info "Milvus not running — memory provider stays as '$CURRENT_MEM'"
-    info "Start Milvus first, then re-run this script to enable"
+    warn "Vault NOT mounted at $VAULT_MOUNT"
+    info "Hermes can still run, but won't have access to shared memory"
 fi
 
 # ═══════════════════════════════════════════════════════════════
-# 5. Camofox Browser (port 9377)
-# ═══════════════════════════════════════════════════════════════
-
-header "Camofox Browser (Anti-Detection)"
-if check_port_open localhost 9377; then
-    ok "Camofox port 9377 is open"
-else
-    info "Camofox port 9377 not open (may be normal if Hermes hasn't started Camofox)"
-    info "Camofox starts on-demand when Hermes needs browser automation"
-fi
-
-# ═══════════════════════════════════════════════════════════════
-# 6. Test profile (optional)
+# 5. Test profile (optional)
 # ═══════════════════════════════════════════════════════════════
 
 header "Profile Test"
@@ -181,7 +154,7 @@ if [[ "$HERMES_RUNNING" == "true" ]]; then
     if ask_yn "Run a quick Hermes profile test?" "N"; then
         TEST_PROFILE=$(ask_input "Test profile" "$CURRENT_PROFILE")
         info "Testing profile '$TEST_PROFILE'..."
-        RESULT=$(docker exec ski-hermes hermes -p "$TEST_PROFILE" --max-turns 1 chat "Reply with only: OK" 2>&1 || echo "FAILED")
+        RESULT=$(docker exec "$HERMES_CONTAINER" hermes -p "$TEST_PROFILE" --max-turns 1 chat "Reply with only: OK" 2>&1 || echo "FAILED")
         if echo "$RESULT" | grep -qi "ok\|success"; then
             ok "Profile '$TEST_PROFILE' responded"
         else
@@ -191,7 +164,7 @@ if [[ "$HERMES_RUNNING" == "true" ]]; then
         skip "Profile test"
     fi
 else
-    info "Hermes not running — skipping profile test"
+    info "Hermes Agent not running — skipping profile test"
 fi
 
 # ═══════════════════════════════════════════════════════════════
@@ -200,8 +173,8 @@ fi
 
 header "Hermes Setup Complete"
 info "Default profile: $(grep -oP 'SKI_HERMES_DEFAULT_PROFILE=\K.*' "$ENV_FILE" 2>/dev/null || echo "$DEF_DEFAULT_PROFILE")"
-info "Memory provider: $(grep -oP 'SKI_HERMES_MEMORY_PROVIDER=\K.*' "$ENV_FILE" 2>/dev/null || echo "built-in")"
-info "Camofox port:    9377"
+info "Memory provider: Obsidian vault ($VAULT_MOUNT)"
+info "Container:       $HERMES_CONTAINER"
 echo ""
 echo -e "  ${GRAY}Profile switching: hermes -p [profile] chat${NC}"
 echo -e "  ${GRAY}Example: hermes -p kether-alpha --max-turns 5 chat${NC}"

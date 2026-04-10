@@ -2,7 +2,10 @@
 # ═══════════════════════════════════════════════════════════════
 # SKI — 04_deploy_containers.sh — Interactive container deployment
 #
-# Configures: Git repo clone, .env setup, docker compose up
+# Configures: Runtime directory, .env setup, docker compose up
+#
+# Architecture: 3 containers (Agent Zero, Hermes Agent, OpenClaw)
+# Runtime dir:  ~/28Bots_Runtime  (mounted from host via SMB)
 #
 # Run as regular user (archat), NOT as root.
 # If docker group not active yet, run via: sg docker -c "bash 04_deploy_containers.sh"
@@ -13,14 +16,14 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/00_lib.sh"
 
-show_banner "Container Deployment" "Git repo, .env config, Docker Compose"
+show_banner "Container Deployment" "3 Containers: Agent Zero, Hermes, OpenClaw"
 
 # ── Defaults ──
-DEF_REPO_URL="https://github.com/IdomyownGPT/28BotsTST.git"
-DEF_REPO_DIR="$HOME/28BotsTST"
 DEF_HOST_IP="192.168.178.90"
 DEF_LM_PORT="1234"
 DEF_VAULT_MOUNT="/mnt/28bots_core"
+DEF_RUNTIME_DIR="$HOME/28Bots_Runtime"
+DEF_RUNTIME_SMB="$DEF_VAULT_MOUNT/runtime"
 
 # ═══════════════════════════════════════════════════════════════
 # 1. Docker access check
@@ -77,62 +80,63 @@ else
 fi
 
 # ═══════════════════════════════════════════════════════════════
-# 4. Git repository
+# 4. Runtime directory
 # ═══════════════════════════════════════════════════════════════
 
-header "Git Repository"
+header "Runtime Directory"
 
-REPO_DIR="$DEF_REPO_DIR"
-if [[ -d "$REPO_DIR/.git" ]]; then
-    BRANCH=$(git -C "$REPO_DIR" branch --show-current 2>/dev/null || echo "unknown")
-    LAST_COMMIT=$(git -C "$REPO_DIR" log -1 --format="%h %s" 2>/dev/null || echo "unknown")
-    found "Repo exists at $REPO_DIR"
-    info "Branch: $BRANCH"
-    info "Latest: $LAST_COMMIT"
-
-    REPO_ACTION=$(ask_choice "What to do with the repo?" \
-        "Keep as-is" \
-        "Pull latest changes" \
-        "Re-clone (fresh)")
-
-    case "$REPO_ACTION" in
-        "Pull latest changes")
-            info "Pulling latest..."
-            git -C "$REPO_DIR" pull && ok "Repo updated" || warn "Pull failed"
-            ;;
-        "Re-clone (fresh)")
-            if ask_yn "Delete $REPO_DIR and re-clone? (DESTRUCTIVE)"; then
-                rm -rf "$REPO_DIR"
-                git clone "$DEF_REPO_URL" "$REPO_DIR"
-                ok "Repo re-cloned"
-            else
-                skip "Re-clone"
-            fi
-            ;;
-        *)
-            ok "Keeping repo as-is"
-            ;;
-    esac
+# Check for runtime dir — prefer local symlink/copy, fall back to SMB mount
+RUNTIME_DIR=""
+if [[ -d "$DEF_RUNTIME_DIR" && -f "$DEF_RUNTIME_DIR/docker-compose.yml" ]]; then
+    ok "Runtime directory found at $DEF_RUNTIME_DIR"
+    RUNTIME_DIR="$DEF_RUNTIME_DIR"
+elif [[ -d "$DEF_RUNTIME_SMB" && -f "$DEF_RUNTIME_SMB/docker-compose.yml" ]]; then
+    ok "Runtime directory found at $DEF_RUNTIME_SMB (SMB mount)"
+    RUNTIME_DIR="$DEF_RUNTIME_SMB"
 else
-    warn "No repo found at $REPO_DIR"
-    REPO_DIR=$(ask_input "Clone repo to" "$DEF_REPO_DIR")
-    REPO_URL=$(ask_input "Repository URL" "$DEF_REPO_URL")
+    warn "Runtime directory not found"
+    info "Expected locations:"
+    info "  $DEF_RUNTIME_DIR"
+    info "  $DEF_RUNTIME_SMB"
+    echo ""
 
-    if ask_yn "Clone $REPO_URL to $REPO_DIR?"; then
-        git clone "$REPO_URL" "$REPO_DIR"
-        ok "Repository cloned"
+    # Offer to create from SMB if vault is mounted
+    if [[ -d "$DEF_VAULT_MOUNT" ]] && check_mount_active "$DEF_VAULT_MOUNT"; then
+        if [[ -d "$DEF_RUNTIME_SMB" ]]; then
+            if ask_yn "Symlink $DEF_RUNTIME_DIR -> $DEF_RUNTIME_SMB?"; then
+                ln -sfn "$DEF_RUNTIME_SMB" "$DEF_RUNTIME_DIR"
+                ok "Symlink created"
+                RUNTIME_DIR="$DEF_RUNTIME_DIR"
+            fi
+        else
+            fail "No runtime/ folder found on the vault mount"
+            info "Copy the runtime template from the host:"
+            info "  Host: D:\\28Bots_Core\\runtime\\"
+            info "  VM:   $DEF_VAULT_MOUNT/runtime/"
+            exit 1
+        fi
     else
-        fail "Cannot deploy containers without the repo"
-        exit 1
+        RUNTIME_DIR=$(ask_input "Runtime directory path" "$DEF_RUNTIME_DIR")
+        if [[ ! -d "$RUNTIME_DIR" ]]; then
+            fail "Directory does not exist: $RUNTIME_DIR"
+            exit 1
+        fi
     fi
 fi
+
+if [[ -z "$RUNTIME_DIR" ]]; then
+    fail "No runtime directory available. Cannot deploy containers."
+    exit 1
+fi
+
+info "Using runtime: $RUNTIME_DIR"
 
 # ═══════════════════════════════════════════════════════════════
 # 5. Environment file (.env)
 # ═══════════════════════════════════════════════════════════════
 
 header "Environment Configuration"
-cd "$REPO_DIR"
+cd "$RUNTIME_DIR"
 
 if [[ -f ".env" ]]; then
     found ".env file exists"
@@ -204,7 +208,7 @@ fi
 # ═══════════════════════════════════════════════════════════════
 
 header "Container Deployment"
-cd "$REPO_DIR"
+cd "$RUNTIME_DIR"
 
 # Show current state
 if docker compose ps &>/dev/null 2>&1; then
@@ -246,7 +250,7 @@ header "Container Health Check"
 if ask_yn "Wait for containers to be ready? (30s timeout)"; then
     TIMEOUT=30
     ELAPSED=0
-    EXPECTED=9  # Total containers in docker-compose.yml
+    EXPECTED=3  # Agent Zero, Hermes Agent, OpenClaw
 
     while [[ $ELAPSED -lt $TIMEOUT ]]; do
         RUNNING=$(docker compose ps --format json 2>/dev/null | grep -c '"running"' || echo "0")
@@ -279,8 +283,9 @@ docker compose ps 2>/dev/null | sed 's/^/    /' || true
 # ═══════════════════════════════════════════════════════════════
 
 header "Deployment Complete"
-info "Repo:       $REPO_DIR"
+info "Runtime:    $RUNTIME_DIR"
 info "Vault:      $DEF_VAULT_MOUNT"
 info "LM Studio:  http://$HOST_IP:$LM_PORT/v1"
+info "Services:   Agent Zero (:8080), Hermes (:9377), OpenClaw (:3000)"
 echo ""
 print_summary
