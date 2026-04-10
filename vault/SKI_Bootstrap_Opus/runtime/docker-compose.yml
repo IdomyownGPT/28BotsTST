@@ -1,0 +1,61 @@
+# ═══════════════════════════════════════════════════════════════
+# SKI — docker-compose.yml — Sephirotische Kernintelligenz
+#
+# Topologie: Target State Topology (TST)
+# Architektur: Agent-Zero, Hermes-Agent, OpenClaw
+#
+# Identitäts-Prinzip: Diese Datei liegt im Windows-Vault
+# (D:\28Bots_Core\runtime) und wird von der VM
+# direkt über /mnt/28bots_core/runtime ausgeführt.
+#
+# Start:  docker compose up -d
+# Status: docker compose ps
+# Logs:   docker compose logs -f
+# ═══════════════════════════════════════════════════════════════
+
+services:
+  # --- Agent Zero (Orchestrator & Task Runner) ---
+  agent-zero:
+    build:
+      context: ./agents/agent-zero
+    container_name: ski-agent-zero
+    ports:
+      - "8080:8080"
+    env_file: .env
+    volumes:
+      - ./agent-zero/workspace:/app/workspace
+      - ./agent-zero/config:/app/config
+    restart: unless-stopped
+    networks:
+      - ski-net
+
+  # --- Hermes Agent (NousResearch — Reasoning & Profiles) ---
+  hermes-agent:
+    build:
+      context: ./agents/hermes-agent
+    container_name: ski-hermes-agent
+    ports:
+      - "9377:9377"
+    env_file: .env
+    volumes:
+      - ./hermes/memory:/app/memory
+      - ./hermes/data:/app/data
+    restart: unless-stopped
+    networks:
+      - ski-net
+
+  # --- OpenClaw (Telegram Bot + Tool Gateway) ---
+  openclaw:
+    build:
+      context: ./openclaw
+    container_name: ski-openclaw
+    ports:
+      - "3000:3000"
+    env_file: .env
+    restart: unless-stopped
+    networks:
+      - ski-net
+
+networks:
+  ski-net:
+    driver: bridge

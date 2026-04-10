@@ -2,6 +2,8 @@
 # ═══════════════════════════════════════════════════════════════
 # SKI — 06_verify_vm.sh — Comprehensive VM verification
 #
+# Architecture: 3 containers (Agent Zero, Hermes Agent, OpenClaw)
+#
 # Read-only checks — does NOT modify anything.
 # Uses 00_lib.sh for consistent output formatting.
 # ═══════════════════════════════════════════════════════════════
@@ -20,7 +22,7 @@ info "IP:       $(get_current_ip)"
 HOST_IP="${SKI_HOST_IP:-192.168.178.90}"
 LM_PORT="${SKI_LM_STUDIO_PORT:-1234}"
 VAULT_MOUNT="${SKI_VAULT_MOUNT:-/mnt/28bots_core}"
-REPO_DIR="${SKI_REPO_DIR:-$HOME/28BotsTST}"
+RUNTIME_DIR="${SKI_RUNTIME_DIR:-$HOME/28Bots_Runtime}"
 
 # ── System ──
 header "System Resources"
@@ -58,9 +60,9 @@ else
     fail "LM Studio API not responding"
 fi
 
-# Container ports
+# Container ports (3-container architecture)
 header "Container Ports"
-for entry in "2024:LangGraph" "2026:DeerFlow-nginx" "3000:OpenClaw" "3100:DeerFlow-Frontend" "8001:Gateway" "8080:AgentZero" "9377:Camofox" "19530:Milvus"; do
+for entry in "8080:Agent-Zero" "9377:Hermes-Agent" "3000:OpenClaw"; do
     port="${entry%%:*}"
     name="${entry##*:}"
     if nc -z -w 2 127.0.0.1 "$port" 2>/dev/null; then
@@ -116,37 +118,39 @@ else
     fail "Docker daemon not accessible (not in docker group?)"
 fi
 
-# ── Hermes ──
-header "Hermes"
-if docker ps --format '{{.Names}}' 2>/dev/null | grep -q ski-hermes; then
-    ok "Hermes running in Docker"
-    # Check profile env
-    PROFILE=$(docker exec ski-hermes printenv HERMES_DEFAULT_PROFILE 2>/dev/null || echo "unknown")
+# ── Hermes Agent ──
+header "Hermes Agent"
+if docker ps --format '{{.Names}}' 2>/dev/null | grep -q ski-hermes-agent; then
+    ok "Hermes Agent running in Docker"
+    PROFILE=$(docker exec ski-hermes-agent printenv SKI_HERMES_DEFAULT_PROFILE 2>/dev/null || echo "unknown")
     info "Default profile: $PROFILE"
-elif command -v hermes &>/dev/null; then
-    ok "Hermes CLI available"
 else
-    warn "Hermes not found (CLI or Docker)"
+    warn "Hermes Agent not found (container: ski-hermes-agent)"
 fi
 
-# ── Repo ──
-header "Repository"
-if [[ -d "$REPO_DIR/.git" ]]; then
-    ok "Repo present at $REPO_DIR"
-    BRANCH=$(git -C "$REPO_DIR" branch --show-current 2>/dev/null || echo "unknown")
-    info "Branch: $BRANCH"
-    if [[ -f "$REPO_DIR/docker-compose.yml" ]]; then
+# ── Runtime Directory ──
+header "Runtime Directory"
+if [[ -d "$RUNTIME_DIR" ]]; then
+    ok "Runtime directory present at $RUNTIME_DIR"
+    if [[ -f "$RUNTIME_DIR/docker-compose.yml" ]]; then
         ok "docker-compose.yml present"
+        SVC_COUNT=$(grep -c '^\s\+build:' "$RUNTIME_DIR/docker-compose.yml" 2>/dev/null || echo "?")
+        info "Services defined: $SVC_COUNT"
     else
         fail "docker-compose.yml missing"
     fi
-    if [[ -f "$REPO_DIR/.env" ]]; then
+    if [[ -f "$RUNTIME_DIR/.env" ]]; then
         ok ".env file configured"
     else
         warn ".env file missing (copy from .env.example)"
     fi
+    # Check if symlink to SMB
+    if [[ -L "$RUNTIME_DIR" ]]; then
+        TARGET=$(readlink -f "$RUNTIME_DIR")
+        info "Symlink target: $TARGET"
+    fi
 else
-    warn "Repo not cloned at $REPO_DIR"
+    warn "Runtime directory not found at $RUNTIME_DIR"
 fi
 
 # ═══════════════════════════════════════════════════════════════
