@@ -20,7 +20,7 @@ services:
       context: ./agents/agent-zero
     container_name: ski-agent-zero
     ports:
-      - "8080:8080"
+      - "8080:80"
     env_file: .env
     volumes:
       - ./agent-zero/workspace:/app/workspace
