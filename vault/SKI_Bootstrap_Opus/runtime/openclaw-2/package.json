@@ -1,0 +1,13 @@
+{
+  "name": "openclaw-2",
+  "version": "1.0.0",
+  "description": "OpenClaw-2 — SKI Second Telegram Bot (separate environment)",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "node-telegram-bot-api": "^0.66.0",
+    "express": "^4.21.0"
+  }
+}

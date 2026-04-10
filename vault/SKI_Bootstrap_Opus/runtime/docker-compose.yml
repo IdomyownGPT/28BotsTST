@@ -2,11 +2,11 @@
 # SKI — docker-compose.yml — Sephirotische Kernintelligenz
 #
 # Topologie: Target State Topology (TST)
-# Architektur: Agent-Zero, Hermes-Agent, OpenClaw
+# Architektur: Agent-Zero, Hermes-Agent, OpenClaw, OpenClaw-2
 #
-# Identitäts-Prinzip: Diese Datei liegt im Windows-Vault
+# Identitaets-Prinzip: Diese Datei liegt im Windows-Vault
 # (D:\28Bots_Core\runtime) und wird von der VM
-# direkt über /mnt/28bots_core/runtime ausgeführt.
+# direkt ueber /mnt/28bots_core/runtime ausgefuehrt.
 #
 # Start:  docker compose up -d
 # Status: docker compose ps
@@ -29,7 +29,7 @@ services:
     networks:
       - ski-net
 
-  # --- Hermes Agent (NousResearch — Reasoning & Profiles) ---
+  # --- Hermes Agent (Reasoning & 3x3 Profile Matrix) ---
   hermes-agent:
     build:
       context: ./agents/hermes-agent
@@ -44,7 +44,7 @@ services:
     networks:
       - ski-net
 
-  # --- OpenClaw (Telegram Bot + Tool Gateway) ---
+  # --- OpenClaw (Telegram Bot 1) ---
   openclaw:
     build:
       context: ./openclaw
@@ -52,6 +52,24 @@ services:
     ports:
       - "3000:3000"
     env_file: .env
+    volumes:
+      - ./openclaw/data:/app/data
+    restart: unless-stopped
+    networks:
+      - ski-net
+
+  # --- OpenClaw-2 (Telegram Bot 2 — separate Umgebung) ---
+  openclaw-2:
+    build:
+      context: ./openclaw-2
+    container_name: ski-openclaw-2
+    ports:
+      - "3001:3001"
+    env_file: .env
+    environment:
+      - PORT=3001
+    volumes:
+      - ./openclaw-2/data:/app/data
     restart: unless-stopped
     networks:
       - ski-net
