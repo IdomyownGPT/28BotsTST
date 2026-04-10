@@ -56,7 +56,7 @@ ask_yn() {
 ask_input() {
     local prompt="$1"
     local default="$2"
-    echo -en "  ${BOLD}?${NC} ${prompt} [${CYAN}${default}${NC}]: "
+    echo -en "  ${BOLD}?${NC} ${prompt} [${CYAN}${default}${NC}]: " >&2
     read -r answer
     echo "${answer:-$default}"
 }
@@ -66,13 +66,13 @@ ask_choice() {
     local prompt="$1"
     shift
     local options=("$@")
-    echo -e "  ${BOLD}?${NC} ${prompt}"
+    echo -e "  ${BOLD}?${NC} ${prompt}" >&2
     local i=1
     for opt in "${options[@]}"; do
-        echo -e "    ${CYAN}${i})${NC} ${opt}"
+        echo -e "    ${CYAN}${i})${NC} ${opt}" >&2
         ((i++))
     done
-    echo -en "  Choice [1]: "
+    echo -en "  Choice [1]: " >&2
     read -r choice
     choice="${choice:-1}"
     if [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= ${#options[@]} )); then
@@ -85,9 +85,9 @@ ask_choice() {
 # ask_password "SMB password"  →  prints password (no echo)
 ask_password() {
     local prompt="$1"
-    echo -en "  ${BOLD}?${NC} ${prompt}: "
+    echo -en "  ${BOLD}?${NC} ${prompt}: " >&2
     read -rs answer
-    echo ""
+    echo "" >&2
     echo "$answer"
 }
 
