@@ -26,13 +26,15 @@ echo ""
 echo "--- LM Studio API (Agent Backend) ---"
 
 if curl -sf "http://$HOST_IP:$LM_PORT/v1/models" >/dev/null 2>&1; then
-    MODEL_COUNT=$(curl -sf "http://$HOST_IP:$LM_PORT/v1/models" | python3 -c "import sys,json; print(len(json.load(sys.stdin).get('data',[])))" 2>/dev/null || echo "?")
+    # FIX: jq statt python für sauberes Parsing
+    MODEL_COUNT=$(curl -sf "http://$HOST_IP:$LM_PORT/v1/models" | jq '.data | length' 2>/dev/null || echo "?")
     log_ok "LM Studio API responding ($MODEL_COUNT models loaded)"
 
-    # Test inference (what the agent uses to propose changes)
-    BODY='{"model":"'$(curl -sf "http://$HOST_IP:$LM_PORT/v1/models" | python3 -c "import sys,json; d=json.load(sys.stdin).get('data',[]); print(d[0]['id'] if d else '')" 2>/dev/null)'","messages":[{"role":"user","content":"Reply OK"}],"max_tokens":5}'
+    # Test inference
+    MODEL_ID=$(curl -sf "http://$HOST_IP:$LM_PORT/v1/models" | jq -r '.data[0].id // empty' 2>/dev/null)
+    BODY='{"model":"'$MODEL_ID'","messages":[{"role":"user","content":"Reply OK"}],"max_tokens":5}'
 
-    if [ -n "$(echo "$BODY" | grep -o '"model":"[^"]*"')" ]; then
+    if [ -n "$MODEL_ID" ]; then
         RESPONSE=$(curl -sf -X POST "http://$HOST_IP:$LM_PORT/v1/chat/completions" \
             -H "Content-Type: application/json" \
             -d "$BODY" --max-time 30 2>/dev/null)
