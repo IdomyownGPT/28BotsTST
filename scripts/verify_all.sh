@@ -25,6 +25,7 @@ for arg in "$@"; do
             echo "  2. verify_docker.sh     — Docker containers & resources"
             echo "  3. verify_lm_studio.sh  — LM Studio API & models"
             echo "  4. verify_vault.sh      — Obsidian Vault SMB mount"
+            echo "  5. verify_autoresearch.sh — Auto Research status"
             echo ""
             echo "Exit codes:"
             echo "  0  All checks passed (or warnings only)"
@@ -112,6 +113,7 @@ main() {
     run_script "verify_docker.sh"
     run_script "verify_lm_studio.sh"
     run_script "verify_vault.sh"
+    run_script "verify_autoresearch.sh"
 
     # ── Grand Summary ──
     echo ""

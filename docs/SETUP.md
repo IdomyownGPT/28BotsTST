@@ -166,7 +166,45 @@ Log out and back in for group changes to take effect.
    hermes tools install camofox
    ```
 
-## Step 8: Telegram Bot
+## Step 8: Auto Research (Host)
+
+Setup the autonomous experiment loop on the Windows host:
+
+1. **Prerequisites** (on host):
+   - Python 3.10+ installed
+   - CUDA drivers for RTX 3060
+   - LM Studio running with Bonsai Prism 8B loaded
+
+2. Run setup script:
+   ```powershell
+   # From the vault or repo
+   .\vault\SKI_Bootstrap_Opus\host\07_setup_autoresearch.ps1
+   ```
+
+3. Prepare training data:
+   ```powershell
+   cd D:\28Bots_Core\AutoResearch
+   .\.venv\Scripts\python.exe src\prepare.py
+   ```
+
+4. Quick test (10 experiments):
+   ```powershell
+   .\run_autoresearch.ps1 -MaxExperiments 10
+   ```
+
+5. Steer research direction by editing `program.md`:
+   - Open in Obsidian: `SKI_Cookbook/M12_AutoResearch/`
+   - Or directly: `D:\28Bots_Core\AutoResearch\src\program.md`
+
+6. Overnight run:
+   ```powershell
+   .\run_overnight.ps1  # 200 experiments, logs to logs\
+   ```
+
+7. Check results in Obsidian:
+   - `SKI_Cookbook/M12_AutoResearch/AutoResearch_Log.md`
+
+## Step 9: Telegram Bot
 
 1. Create bot via [@BotFather](https://t.me/BotFather):
    - Name: `MegamarphBot`

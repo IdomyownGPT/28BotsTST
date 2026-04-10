@@ -20,7 +20,13 @@ SKI (Sephirotische Kernintelligenz / Sephirotic Core Intelligence) is a local, s
 │  │  └─────────────────────┘  │     │  │  └ nginx :2026        │ │ │
 │  │                           │     │  └───────────────────────┘ │ │
 │  │  ┌─────────────────────┐  │     │  ┌───────────────────────┐ │ │
-│  │  │  Obsidian Vault     │  │     │  │  OpenClaw :3000       │ │ │
+│  │  │  Auto Research      │  │     │  │  AutoRes Monitor      │ │ │
+│  │  │  GPU Training Loop  │  │     │  │  (watches vault logs) │ │ │
+│  │  │  Bonsai Prism Agent │  │     │  └───────────────────────┘ │ │
+│  │  └─────────────────────┘  │     │                             │ │
+│  │                           │     │  └───────────────────────┘ │ │
+│  │                           │     │  ┌───────────────────────┐ │ │
+│  │  ┌─────────────────────┐  │     │  │  OpenClaw :3000       │ │ │
 │  │  │  D:\28Bots_Core\    │◄─┼─SMB─┼──│  Telegram Bot         │ │ │
 │  │  │  Obsidian_Vault\    │  │     │  └───────────────────────┘ │ │
 │  │  └─────────────────────┘  │     │  ┌───────────────────────┐ │ │
@@ -91,7 +97,41 @@ VM Mount ←→ /mnt/28bots_core/Obsidian_Vault/
 Containers ←→ /mnt/ski-vault/
 ```
 
-### 3. User Interface Path
+### 3. Auto Research Path (Karpathy-style experiment loop)
+
+Auto Research runs on the **host** (needs GPU for training):
+
+```
+program.md (Vault) ──→ Bonsai Prism 8B Agent (LM Studio :1234)
+                              │
+                              ▼
+                        Propose change to train.py
+                              │
+                              ▼
+                        Run training (RTX 3060, 5-min budget)
+                              │
+                              ▼
+                        Evaluate val_bpb metric
+                              │
+                    ┌─────────┴─────────┐
+                    ▼                   ▼
+              Improved?             No improvement
+              Keep change           Revert code
+                    │                   │
+                    └─────────┬─────────┘
+                              ▼
+                  Log to Vault (M12_AutoResearch/)
+                              │
+                              ▼
+                  Monitor container reads logs
+                  Obsidian shows results
+```
+
+Key: The LLM (Bonsai Prism 8B) acts as BOTH the inference engine AND the
+research agent that proposes code changes. Research direction is steered by
+editing `program.md` in Obsidian.
+
+### 4. User Interface Path
 
 ```
 Marvin → Telegram → @MegamarphBot → OpenClaw :3000 → DeerFlow :2026

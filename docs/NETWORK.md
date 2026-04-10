@@ -17,6 +17,7 @@ The SKI system spans two machines on the same LAN subnet `192.168.178.0/24`:
 |------|---------|----------|--------|
 | 445 | SMB/CIFS (SKI-Vault-Root) | TCP | Active |
 | 1234 | LM Studio API | HTTP | Active |
+| — | Auto Research (local only) | — | New — no port exposed |
 
 ### VM (192.168.178.124)
 
@@ -70,6 +71,9 @@ All containers on the VM share the `docker_deer-flow` bridge network for inter-c
 | DeerFlow nginx | DeerFlow Gateway | Internal network (container:8001) |
 | Any container | LM Studio | External: `http://192.168.178.90:1234/v1/` |
 | Any container | Vault | Bind mount: `/mnt/ski-vault/` |
+| AutoRes Monitor | Vault logs | Bind mount: `/mnt/ski-vault/` (read-only) |
+| Auto Research (Host) | LM Studio | Local: `http://localhost:1234/v1/` |
+| Auto Research (Host) | Vault | Direct: `D:\28Bots_Core\Obsidian_Vault\root\` |
 
 ## Firewall
 

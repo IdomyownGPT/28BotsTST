@@ -116,6 +116,44 @@ services:
     networks:
       - deer-flow
 
+  # ── Auto Research Monitor ──
+  # Watches experiment results from the vault and provides a simple dashboard
+  # The actual Auto Research loop runs on the HOST (needs GPU)
+
+  autoresearch-monitor:
+    image: python:3.12-slim
+    container_name: ski-autoresearch-monitor
+    volumes:
+      - /mnt/28bots_core/Obsidian_Vault:/mnt/ski-vault:ro
+    environment:
+      - SKI_HOST_IP=${SKI_HOST_IP:-192.168.178.90}
+      - SKI_LM_STUDIO_BASE_URL=${SKI_LM_STUDIO_BASE_URL:-http://192.168.178.90:1234/v1}
+    mem_limit: 256m
+    restart: unless-stopped
+    networks:
+      - deer-flow
+    command: >
+      python -c "
+      import json, time, os;
+      results = '/mnt/ski-vault/SKI_Cookbook/M12_AutoResearch/results.jsonl';
+      print('[monitor] Watching Auto Research results...');
+      last = 0;
+      while True:
+          try:
+              if os.path.exists(results):
+                  with open(results) as f:
+                      lines = f.readlines();
+                  if len(lines) > last:
+                      for line in lines[last:]:
+                          exp = json.loads(line);
+                          s = 'KEPT' if exp.get('kept') else 'REVERTED';
+                          print(f'[exp {exp.get(\"id\",\"?\")}] {exp.get(\"description\",\"?\")[:60]} | val_bpb={exp.get(\"val_bpb\",\"N/A\")} | {s}');
+                      last = len(lines);
+          except Exception as e:
+              print(f'[monitor] Error: {e}');
+          time.sleep(30);
+      "
+
   # ── Milvus Vector Database ──
 
   milvus:
@@ -144,7 +182,7 @@ volumes:
   milvus-data:
 
 # ── Resource Notes ──
-# Total memory allocated: ~8.25 GB
+# Total memory allocated: ~8.5 GB
 #   deerflow-langgraph:  2.0 GB
 #   deerflow-gateway:    0.5 GB
 #   deerflow-frontend:   0.5 GB
@@ -152,9 +190,10 @@ volumes:
 #   openclaw:            0.5 GB
 #   hermes:              1.5 GB  (increased for v0.7 Camofox + memory plugins)
 #   agent-zero:          1.0 GB
+#   autoresearch-mon:    0.25 GB
 #   milvus:              2.0 GB
 #
-# With 9GB VM RAM, ~0.75 GB remains for the OS. INSUFFICIENT.
+# With 9GB VM RAM, ~0.5 GB remains for the OS. INSUFFICIENT.
 # RECOMMENDATION: Increase VM RAM to 16GB in Hyper-V settings.
 #
 # Hermes v0.7 new port: 9377 (Camofox anti-detection browser)

@@ -51,6 +51,49 @@ curl -sf http://192.168.178.90:1234/v1/models
 
 ---
 
+### Auto Research (Karpathy-style experiment loop)
+
+| Property | Value |
+|----------|-------|
+| Location | Windows Host (192.168.178.90) |
+| GPU | RTX 3060 · CUDA |
+| Agent LLM | Bonsai Prism 8B via LM Studio |
+| Metric | val_bpb (validation bits-per-byte) |
+| Budget | 5 minutes per experiment |
+| Status | New |
+
+**Role:** Autonomous ML research agent that optimizes training code without human intervention. Based on [Karpathy's autoresearch](https://github.com/karpathy/autoresearch) pattern.
+
+**How it works:**
+1. Agent LLM (Bonsai Prism 8B) reads `program.md` for research direction
+2. Agent proposes a single change to `train.py`
+3. Training runs on RTX 3060 with 5-minute wall-clock budget
+4. If `val_bpb` improves → keep change; else → revert
+5. Loop repeats (~12 experiments/hour, ~100 overnight)
+
+**Files:**
+- `program.md` — Research direction (editable in Obsidian)
+- `train.py` — The ONLY file the agent modifies
+- `prepare.py` — Data loading (never modified)
+- `ski_runner.py` — Experiment loop orchestrator
+- `config.py` — Configuration (reads from environment)
+
+**Vault Integration:**
+- Results logged to `SKI_Cookbook/M12_AutoResearch/results.jsonl`
+- Markdown summary at `SKI_Cookbook/M12_AutoResearch/AutoResearch_Log.md`
+- `program.md` editable in Obsidian to steer research direction
+
+**Quick Start:**
+```powershell
+# On the Windows host
+cd D:\28Bots_Core\AutoResearch
+.\run_autoresearch.ps1                    # 100 experiments
+.\run_autoresearch.ps1 -MaxExperiments 10 # Quick test
+.\run_overnight.ps1                       # 200 experiments overnight
+```
+
+---
+
 ## VM Docker Containers
 
 ### DeerFlow (Super-Agent)
@@ -182,11 +225,18 @@ User (Marvin)
   ├── Telegram ──→ OpenClaw :3000 ──→ DeerFlow :2026
   ├── Browser  ──→ DeerFlow Frontend :3100
   ├── Obsidian ──→ Vault (direct on host)
-  └── SSH      ──→ VM (archat@192.168.178.124)
-                      │
-                      ├── DeerFlow ──→ LM Studio :1234
-                      ├── Hermes   ──→ LM Studio :1234
-                      ├── Agent Zero ──→ LM Studio :1234
-                      └── All ──→ Milvus :19530 (embeddings)
-                              ──→ Vault /mnt/ski-vault (knowledge)
+  │                 └── program.md ──→ Auto Research (steers agent)
+  ├── SSH      ──→ VM (archat@192.168.178.124)
+  │                   │
+  │                   ├── DeerFlow ──→ LM Studio :1234
+  │                   ├── Hermes   ──→ LM Studio :1234
+  │                   ├── Agent Zero ──→ LM Studio :1234
+  │                   ├── AutoRes Monitor ──→ Vault (reads logs)
+  │                   └── All ──→ Milvus :19530 (embeddings)
+  │                           ──→ Vault /mnt/ski-vault (knowledge)
+  │
+  └── Auto Research (Host, GPU)
+        ├── Agent: Bonsai Prism 8B via LM Studio :1234
+        ├── Training: RTX 3060 · CUDA
+        └── Results: Vault/M12_AutoResearch/ → Obsidian
 ```
