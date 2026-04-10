@@ -1,0 +1,17 @@
+[Unit]
+Description=SKI Startup — Mount Vault and start containers after reboot
+After=network-online.target docker.service
+Wants=network-online.target docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=archat
+Group=archat
+ExecStart=/usr/local/bin/ski_startup.sh
+StandardOutput=journal
+StandardError=journal
+TimeoutStartSec=180
+
+[Install]
+WantedBy=multi-user.target
