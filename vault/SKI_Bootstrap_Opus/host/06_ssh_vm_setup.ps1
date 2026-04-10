@@ -2,7 +2,9 @@
 .SYNOPSIS
     SKI Bootstrap — Step 6: Run VM setup scripts remotely via SSH
 .DESCRIPTION
-    Connects to the Ubuntu VM via SSH and runs the bootstrap scripts in order.
+    Connects to the Ubuntu VM via SSH and runs the master installer interactively.
+    Uses ssh -t for TTY allocation so interactive prompts work through SSH.
+    Uses sg docker to avoid logout/login after Docker group setup.
     Requires: OpenSSH client on Host, OpenSSH server on VM.
 #>
 
@@ -48,35 +50,20 @@ Write-Host "  [OK] Found $scriptCheck scripts" -ForegroundColor Green
 # Make scripts executable
 ssh "$VM_USER@$VM_IP" "chmod +x $BOOTSTRAP_PATH/*.sh"
 
-# Run scripts
-$scripts = @(
-    @{ Name = "01_setup_base.sh";        Desc = "Base packages & system config" },
-    @{ Name = "02_setup_smb_mount.sh";   Desc = "SMB mount configuration" },
-    @{ Name = "03_setup_docker.sh";      Desc = "Docker installation" }
-)
+# Run master installer with TTY allocation for interactive prompts
+Write-Host "`n  Running master installer on VM..." -ForegroundColor Cyan
+Write-Host "  NOTE: Scripts are interactive — answer prompts in the terminal." -ForegroundColor Yellow
+Write-Host ""
 
-Write-Host "`n  Running VM setup scripts..." -ForegroundColor Cyan
-Write-Host "  (04_deploy_containers.sh and 05_setup_hermes.sh require manual run after Docker group reload)`n" -ForegroundColor Yellow
+ssh -t "$VM_USER@$VM_IP" "bash $BOOTSTRAP_PATH/install_ski_vm.sh"
 
-foreach ($script in $scripts) {
-    Write-Host "  ┌─ $($script.Name): $($script.Desc)" -ForegroundColor Cyan
-    $result = ssh "$VM_USER@$VM_IP" "sudo bash $BOOTSTRAP_PATH/$($script.Name)" 2>&1
-    Write-Host $result
-    if ($LASTEXITCODE -eq 0) {
-        Write-Host "  └─ [DONE]" -ForegroundColor Green
-    } else {
-        Write-Host "  └─ [FAILED] Exit code: $LASTEXITCODE" -ForegroundColor Red
-        Write-Host "  Stopping. Fix the issue and re-run." -ForegroundColor Yellow
-        exit 1
-    }
-    Write-Host ""
+if ($LASTEXITCODE -eq 0) {
+    Write-Host "`n  [DONE] VM setup complete!" -ForegroundColor Green
+} else {
+    Write-Host "`n  [WARN] Master installer exited with code $LASTEXITCODE" -ForegroundColor Yellow
+    Write-Host "  Check the output above for details." -ForegroundColor Gray
 }
 
-Write-Host "`n[DONE] Base VM setup complete." -ForegroundColor Green
 Write-Host ""
-Write-Host "  REMAINING MANUAL STEPS:" -ForegroundColor Yellow
-Write-Host "    1. SSH into VM: ssh $VM_USER@$VM_IP" -ForegroundColor Gray
-Write-Host "    2. Log out and back in (for Docker group)" -ForegroundColor Gray
-Write-Host "    3. Run: bash $BOOTSTRAP_PATH/04_deploy_containers.sh" -ForegroundColor Gray
-Write-Host "    4. Run: bash $BOOTSTRAP_PATH/05_setup_hermes.sh" -ForegroundColor Gray
-Write-Host "    5. Run: bash $BOOTSTRAP_PATH/06_verify_vm.sh" -ForegroundColor Gray
+Write-Host "  Tip: Run 06_verify_vm.sh on the VM to confirm everything works." -ForegroundColor Gray
+Write-Host ""
