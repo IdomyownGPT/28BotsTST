@@ -429,7 +429,7 @@ param([int]`$MaxExperiments = 100, [int]`$Budget = 300)
     $overnightContent = @"
 `$ts = Get-Date -Format "yyyyMMdd_HHmmss"
 `$log = "$logsDir\overnight_`$ts.log"
-Write-Host "Overnight run — log: `$log" -ForegroundColor Cyan
+Write-Host "Overnight run - log: `$log" -ForegroundColor Cyan
 & "$arDir\run_autoresearch.ps1" -MaxExperiments 200 -Budget 300 2>&1 | Tee-Object -FilePath `$log
 "@
     Set-Content -Path "$arDir\run_overnight.ps1" -Value $overnightContent
