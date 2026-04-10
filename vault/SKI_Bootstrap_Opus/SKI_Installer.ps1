@@ -454,6 +454,7 @@ function Invoke-RemoteVMSetup {
     }
 
     $target = "$($Config.VMUser)@$($Config.VMIP)"
+    $bp = $Config.BootstrapPath
     Write-Info "Testing SSH to $target..."
 
     $testResult = ssh -o ConnectTimeout=5 -o BatchMode=yes $target "echo SSH_OK" 2>&1
@@ -465,39 +466,97 @@ function Invoke-RemoteVMSetup {
     Write-OK "SSH connection successful"
 
     # Check scripts exist
-    $scriptCount = ssh $target "ls $($Config.BootstrapPath)/*.sh 2>/dev/null | wc -l"
+    $scriptCount = ssh $target "ls $bp/*.sh 2>/dev/null | wc -l"
     if ([int]$scriptCount -lt 1) {
-        Write-Host "  [ERROR] No scripts at $($Config.BootstrapPath)" -ForegroundColor Red
+        Write-Host "  [ERROR] No scripts at $bp" -ForegroundColor Red
         Write-Host "  Ensure vault SMB mount is active on the VM." -ForegroundColor Yellow
         return $false
     }
     Write-OK "Found $scriptCount scripts on VM"
 
-    ssh $target "chmod +x $($Config.BootstrapPath)/*.sh"
+    # Make scripts executable
+    ssh $target "chmod +x $bp/*.sh"
 
+    # All 6 VM setup scripts
+    # Scripts 01-03 run as root (sudo), scripts 04-06 run as user with docker group
     $scripts = @(
-        @{ File = "01_setup_base.sh";      Desc = "Base packages & system config" },
-        @{ File = "02_setup_smb_mount.sh";  Desc = "SMB mount configuration" },
-        @{ File = "03_setup_docker.sh";     Desc = "Docker installation" }
+        @{ File = "01_setup_base.sh";       Desc = "Base system & user provisioning"; RunAs = "root" },
+        @{ File = "02_setup_smb_mount.sh";   Desc = "SMB vault mount";                RunAs = "root" },
+        @{ File = "03_setup_docker.sh";      Desc = "Docker installation & group";     RunAs = "root" },
+        @{ File = "04_deploy_containers.sh"; Desc = "Git repo, .env & containers";     RunAs = "docker" },
+        @{ File = "05_setup_hermes.sh";      Desc = "Hermes profiles & memory";        RunAs = "docker" },
+        @{ File = "06_verify_vm.sh";         Desc = "VM verification (read-only)";     RunAs = "docker" }
     )
 
-    foreach ($s in $scripts) {
-        Write-Host "`n  --- $($s.File): $($s.Desc) ---" -ForegroundColor Cyan
-        ssh $target "sudo bash $($Config.BootstrapPath)/$($s.File)"
-        if ($LASTEXITCODE -ne 0) {
-            Write-Host "  [ERROR] $($s.File) failed (exit $LASTEXITCODE)" -ForegroundColor Red
+    # Sub-menu: run all or pick individual scripts
+    Write-Host "`n  +----------------------------------------------+" -ForegroundColor DarkCyan
+    Write-Host "  |         VM Script Selection                    |" -ForegroundColor DarkCyan
+    Write-Host "  +----------------------------------------------+" -ForegroundColor DarkCyan
+    Write-Host "  |  A. Run ALL scripts (01-06)                    |" -ForegroundColor White
+    Write-Host "  |  1. 01_setup_base.sh      (sudo)               |" -ForegroundColor White
+    Write-Host "  |  2. 02_setup_smb_mount.sh (sudo)               |" -ForegroundColor White
+    Write-Host "  |  3. 03_setup_docker.sh    (sudo)               |" -ForegroundColor White
+    Write-Host "  |  4. 04_deploy_containers  (user+docker)        |" -ForegroundColor White
+    Write-Host "  |  5. 05_setup_hermes.sh    (user+docker)        |" -ForegroundColor White
+    Write-Host "  |  6. 06_verify_vm.sh       (user+docker)        |" -ForegroundColor White
+    Write-Host "  |  V. Verify only (06)                           |" -ForegroundColor White
+    Write-Host "  |  Q. Back to main menu                          |" -ForegroundColor Gray
+    Write-Host "  +----------------------------------------------+" -ForegroundColor DarkCyan
+
+    $vmChoice = Read-Host "`n  Select"
+
+    # Build list of scripts to run
+    $toRun = @()
+    switch ($vmChoice.ToUpper()) {
+        "A" { $toRun = $scripts }
+        "1" { $toRun = @($scripts[0]) }
+        "2" { $toRun = @($scripts[1]) }
+        "3" { $toRun = @($scripts[2]) }
+        "4" { $toRun = @($scripts[3]) }
+        "5" { $toRun = @($scripts[4]) }
+        "6" { $toRun = @($scripts[5]) }
+        "V" { $toRun = @($scripts[5]) }
+        "Q" { return $true }
+        default {
+            Write-Host "  Invalid selection." -ForegroundColor Red
             return $false
         }
-        Write-OK "$($s.File) completed"
     }
 
-    Write-Host "`n  [DONE] VM base setup complete." -ForegroundColor Green
-    Write-Host "`n  Remaining manual steps:" -ForegroundColor Yellow
-    Write-Host "    1. SSH: ssh $target" -ForegroundColor Gray
-    Write-Host "    2. Log out and back in (Docker group)" -ForegroundColor Gray
-    Write-Host "    3. Run: bash $($Config.BootstrapPath)/04_deploy_containers.sh" -ForegroundColor Gray
-    Write-Host "    4. Run: bash $($Config.BootstrapPath)/05_setup_hermes.sh" -ForegroundColor Gray
-    Write-Host "    5. Run: bash $($Config.BootstrapPath)/06_verify_vm.sh" -ForegroundColor Gray
+    Write-Host ""
+    Write-Info "Running $($toRun.Count) script(s) on $target..."
+    Write-Host "  NOTE: Scripts are interactive — answer prompts in the terminal." -ForegroundColor Yellow
+    Write-Host ""
+
+    foreach ($s in $toRun) {
+        Write-Host "`n  ═══ $($s.File): $($s.Desc) ═══" -ForegroundColor Cyan
+
+        # ssh -t allocates a TTY so interactive prompts (read, select) work
+        # Scripts 01-03: run via sudo (need root for apt, fstab, systemctl)
+        # Scripts 04-06: run via sg docker (docker group workaround, no logout needed)
+        if ($s.RunAs -eq "root") {
+            ssh -t $target "sudo bash $bp/$($s.File)"
+        } else {
+            # sg docker starts a subshell with the docker group active
+            # This avoids the logout/login requirement after 03_setup_docker.sh
+            ssh -t $target "sg docker -c 'bash $bp/$($s.File)'"
+        }
+
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "  [WARN] $($s.File) exited with code $LASTEXITCODE" -ForegroundColor Yellow
+            if (-not (Confirm-Proceed "Continue with remaining scripts?")) {
+                Write-Host "  Stopped by user." -ForegroundColor Yellow
+                return $false
+            }
+        } else {
+            Write-OK "$($s.File) completed"
+        }
+    }
+
+    Write-Host "`n  [DONE] VM setup complete." -ForegroundColor Green
+    Write-Host ""
+    Write-Host "  Tip: Run option V (Verify) to confirm everything is working." -ForegroundColor Gray
+    Write-Host ""
     return $true
 }
 

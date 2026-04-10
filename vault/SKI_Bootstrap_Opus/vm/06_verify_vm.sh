@@ -1,67 +1,66 @@
 #!/usr/bin/env bash
-# SKI Bootstrap — VM Step 6: Full VM verification
-# Runs all verification scripts from the repo or standalone checks
+# ═══════════════════════════════════════════════════════════════
+# SKI — 06_verify_vm.sh — Comprehensive VM verification
+#
+# Read-only checks — does NOT modify anything.
+# Uses 00_lib.sh for consistent output formatting.
+# ═══════════════════════════════════════════════════════════════
 
-set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/00_lib.sh"
 
-echo ""
-echo "╔══════════════════════════════════════════════════════════╗"
-echo "║   SKI Bootstrap — VM Verification                       ║"
-echo "╚══════════════════════════════════════════════════════════╝"
-echo ""
-echo "  Date:     $(date '+%Y-%m-%d %H:%M:%S')"
-echo "  Host:     $(hostname 2>/dev/null || echo 'unknown')"
-echo "  User:     $(whoami 2>/dev/null || echo 'unknown')"
-echo "  Kernel:   $(uname -r 2>/dev/null || echo 'unknown')"
-echo ""
+show_banner "VM Verification" "Read-only system health check"
 
-PASS=0; FAIL=0; WARN=0
+info "Date:     $(date '+%Y-%m-%d %H:%M:%S')"
+info "Hostname: $(get_current_hostname)"
+info "User:     $(whoami)"
+info "Kernel:   $(get_current_kernel)"
+info "IP:       $(get_current_ip)"
 
-ok()   { PASS=$((PASS+1)); echo "  [PASS] $*"; }
-fail() { FAIL=$((FAIL+1)); echo "  [FAIL] $*"; }
-warn() { WARN=$((WARN+1)); echo "  [WARN] $*"; }
-info() { echo "  [INFO] $*"; }
-
-HOST_IP="192.168.178.90"
-LM_PORT="1234"
-VAULT_MOUNT="/mnt/28bots_core"
-REPO_DIR="$HOME/28BotsTST"
+HOST_IP="${SKI_HOST_IP:-192.168.178.90}"
+LM_PORT="${SKI_LM_STUDIO_PORT:-1234}"
+VAULT_MOUNT="${SKI_VAULT_MOUNT:-/mnt/28bots_core}"
+REPO_DIR="${SKI_REPO_DIR:-$HOME/28BotsTST}"
 
 # ── System ──
-echo "--- System ---"
-RAM_MB=$(free -m | awk '/^Mem:/{print $2}')
-RAM_GB=$((RAM_MB / 1024))
-if [ "$RAM_GB" -ge 16 ]; then ok "RAM: ${RAM_GB}GB"
-elif [ "$RAM_GB" -ge 9 ]; then warn "RAM: ${RAM_GB}GB (16GB recommended)"
-else fail "RAM: ${RAM_GB}GB (minimum 9GB)"; fi
+header "System Resources"
+RAM_GB=$(get_ram_gb)
+if (( $(echo "$RAM_GB >= 16" | bc -l 2>/dev/null || echo 0) )); then ok "RAM: ${RAM_GB} GB"
+elif (( $(echo "$RAM_GB >= 9" | bc -l 2>/dev/null || echo 0) )); then warn "RAM: ${RAM_GB} GB (16GB recommended)"
+else fail "RAM: ${RAM_GB} GB (minimum 9GB)"; fi
 
-DISK_AVAIL=$(df -BG / | awk 'NR==2{gsub("G",""); print $4}')
-if [ "$DISK_AVAIL" -ge 20 ]; then ok "Disk: ${DISK_AVAIL}GB free"
-elif [ "$DISK_AVAIL" -ge 10 ]; then warn "Disk: ${DISK_AVAIL}GB free (getting low)"
-else fail "Disk: ${DISK_AVAIL}GB free (< 10GB!)"; fi
+DISK_FREE=$(get_disk_free_gb)
+if [[ "$DISK_FREE" -ge 20 ]]; then ok "Disk: ${DISK_FREE} GB free"
+elif [[ "$DISK_FREE" -ge 10 ]]; then warn "Disk: ${DISK_FREE} GB free (getting low)"
+else fail "Disk: ${DISK_FREE} GB free (< 10GB!)"; fi
+
+# Hyper-V integration
+KERNEL=$(get_current_kernel)
+if [[ "$KERNEL" == *azure* ]]; then
+    ok "Azure kernel: $KERNEL (Hyper-V optimized)"
+else
+    warn "Non-Azure kernel: $KERNEL (consider installing linux-azure)"
+fi
 
 # ── Network ──
-echo ""
-echo "--- Network ---"
+header "Network"
 if ping -c 1 -W 3 "$HOST_IP" &>/dev/null; then
     ok "Host $HOST_IP reachable"
 else
     fail "Host $HOST_IP unreachable"
 fi
 
-# LM Studio
 if curl -sf --max-time 5 "http://${HOST_IP}:${LM_PORT}/v1/models" &>/dev/null; then
     ok "LM Studio API responding on $HOST_IP:$LM_PORT"
-    MODEL_COUNT=$(curl -sf "http://${HOST_IP}:${LM_PORT}/v1/models" | grep -o '"id"' | wc -l)
+    MODEL_COUNT=$(curl -sf "http://${HOST_IP}:${LM_PORT}/v1/models" 2>/dev/null | python3 -c "import sys,json; print(len(json.load(sys.stdin).get('data',[])))" 2>/dev/null || echo "?")
     info "Models loaded: $MODEL_COUNT"
 else
     fail "LM Studio API not responding"
 fi
 
 # Container ports
-echo ""
-echo "--- Container Ports ---"
-for entry in "2024:LangGraph" "2026:DeerFlow-nginx" "3000:OpenClaw" "3100:DeerFlow-Frontend" "8001:Gateway" "8080:AgentZero" "19530:Milvus"; do
+header "Container Ports"
+for entry in "2024:LangGraph" "2026:DeerFlow-nginx" "3000:OpenClaw" "3100:DeerFlow-Frontend" "8001:Gateway" "8080:AgentZero" "9377:Camofox" "19530:Milvus"; do
     port="${entry%%:*}"
     name="${entry##*:}"
     if nc -z -w 2 127.0.0.1 "$port" 2>/dev/null; then
@@ -72,31 +71,30 @@ for entry in "2024:LangGraph" "2026:DeerFlow-nginx" "3000:OpenClaw" "3100:DeerFl
 done
 
 # ── Vault Mount ──
-echo ""
-echo "--- Vault Mount ---"
-if mountpoint -q "$VAULT_MOUNT" 2>/dev/null; then
+header "Vault Mount"
+if check_mount_active "$VAULT_MOUNT"; then
     ok "Vault mounted at $VAULT_MOUNT"
-    # Check fstab options
-    if grep -q "x-systemd.automount" /etc/fstab 2>/dev/null; then
+    if check_fstab_entry "x-systemd.automount"; then
         ok "fstab has x-systemd.automount"
     else
         warn "fstab missing x-systemd.automount"
     fi
     # Write test
-    TESTFILE="$VAULT_MOUNT/.ski_verify_$(date +%s)"
+    TESTFILE="$VAULT_MOUNT/.ski_verify_$$"
     if touch "$TESTFILE" 2>/dev/null; then
         rm -f "$TESTFILE"
         ok "Vault write access confirmed"
     else
-        fail "Vault write access denied"
+        warn "Vault write access denied (read-only?)"
     fi
+    FILE_COUNT=$(find "$VAULT_MOUNT" -maxdepth 2 -type f 2>/dev/null | wc -l)
+    info "Files (depth 2): $FILE_COUNT"
 else
     fail "Vault NOT mounted at $VAULT_MOUNT"
 fi
 
 # ── Docker ──
-echo ""
-echo "--- Docker ---"
+header "Docker"
 if command -v docker &>/dev/null; then
     ok "Docker installed: $(docker --version 2>/dev/null | cut -d' ' -f3)"
 else
@@ -105,40 +103,44 @@ fi
 
 if docker info &>/dev/null; then
     ok "Docker daemon running"
-    RUNNING=$(docker ps --format '{{.Names}}' | wc -l)
-    TOTAL=$(docker ps -a --format '{{.Names}}' | wc -l)
+    RUNNING=$(docker ps --format '{{.Names}}' 2>/dev/null | wc -l)
+    TOTAL=$(docker ps -a --format '{{.Names}}' 2>/dev/null | wc -l)
     info "Containers: $RUNNING running / $TOTAL total"
 
-    # List containers
     docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' 2>/dev/null | while IFS= read -r line; do
         info "  $line"
     done
+elif docker ps &>/dev/null 2>&1; then
+    ok "Docker accessible (via group)"
 else
-    fail "Docker daemon not accessible"
+    fail "Docker daemon not accessible (not in docker group?)"
 fi
 
 # ── Hermes ──
-echo ""
-echo "--- Hermes ---"
-if command -v hermes &>/dev/null; then
-    ok "Hermes CLI available"
-elif docker ps --format '{{.Names}}' 2>/dev/null | grep -qi hermes; then
+header "Hermes"
+if docker ps --format '{{.Names}}' 2>/dev/null | grep -q ski-hermes; then
     ok "Hermes running in Docker"
+    # Check profile env
+    PROFILE=$(docker exec ski-hermes printenv HERMES_DEFAULT_PROFILE 2>/dev/null || echo "unknown")
+    info "Default profile: $PROFILE"
+elif command -v hermes &>/dev/null; then
+    ok "Hermes CLI available"
 else
     warn "Hermes not found (CLI or Docker)"
 fi
 
 # ── Repo ──
-echo ""
-echo "--- Repository ---"
-if [ -d "$REPO_DIR/.git" ]; then
+header "Repository"
+if [[ -d "$REPO_DIR/.git" ]]; then
     ok "Repo present at $REPO_DIR"
-    if [ -f "$REPO_DIR/docker-compose.yml" ]; then
+    BRANCH=$(git -C "$REPO_DIR" branch --show-current 2>/dev/null || echo "unknown")
+    info "Branch: $BRANCH"
+    if [[ -f "$REPO_DIR/docker-compose.yml" ]]; then
         ok "docker-compose.yml present"
     else
         fail "docker-compose.yml missing"
     fi
-    if [ -f "$REPO_DIR/.env" ]; then
+    if [[ -f "$REPO_DIR/.env" ]]; then
         ok ".env file configured"
     else
         warn ".env file missing (copy from .env.example)"
@@ -147,21 +149,8 @@ else
     warn "Repo not cloned at $REPO_DIR"
 fi
 
-# ── Summary ──
-echo ""
-echo "╔══════════════════════════════════════════════════════════╗"
-echo "║                     SUMMARY                              ║"
-echo "╠══════════════════════════════════════════════════════════╣"
-printf "║  PASS: %-3d  FAIL: %-3d  WARN: %-3d  Total: %-3d          ║\n" "$PASS" "$FAIL" "$WARN" "$((PASS+FAIL+WARN))"
-echo "╚══════════════════════════════════════════════════════════╝"
+# ═══════════════════════════════════════════════════════════════
+# Summary
+# ═══════════════════════════════════════════════════════════════
 
-if [ "$FAIL" -gt 0 ]; then
-    echo "  Result: FAILURES DETECTED"
-    exit 1
-elif [ "$WARN" -gt 0 ]; then
-    echo "  Result: WARNINGS (review recommended)"
-    exit 0
-else
-    echo "  Result: ALL SYSTEMS OPERATIONAL"
-    exit 0
-fi
+print_summary
