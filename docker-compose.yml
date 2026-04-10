@@ -1,13 +1,9 @@
 # SKI — Sephirotische Kernintelligenz
 # Docker Compose — All VM containers
-# Run: docker compose up -d
-# Verify: ./scripts/verify_all.sh
-
 version: "3.8"
 
 services:
   # ── DeerFlow Super-Agent ──
-
   deerflow-langgraph:
     image: deerflow-langgraph:latest
     container_name: ski-deerflow-langgraph
@@ -39,7 +35,7 @@ services:
     image: deerflow-frontend:latest
     container_name: ski-deerflow-frontend
     ports:
-      - "3100:3000"  # Remapped from 3000 to 3100 to avoid conflict with OpenClaw
+      - "3100:3000"  # Port 3100 um Konflikt mit OpenClaw zu vermeiden
     mem_limit: 512m
     restart: unless-stopped
     networks:
@@ -51,18 +47,18 @@ services:
     ports:
       - "2026:2026"
     volumes:
-      - ./config/nginx/deerflow.conf:/etc/nginx/conf.d/default.conf:ro
+      # FIX: Wir mounten den Ordner, nicht die Einzeldatei, um Abstürze zu verhindern
+      - ./config/nginx:/etc/nginx/conf.d:ro
     mem_limit: 256m
     restart: unless-stopped
     depends_on:
       - deerflow-langgraph
       - deerflow-frontend
-      - deerflow-gateway
+      - agent-zero
     networks:
       - deer-flow
 
   # ── OpenClaw — Telegram Bot + Tool Gateway ──
-
   openclaw:
     image: node:22
     container_name: ski-openclaw
@@ -73,18 +69,21 @@ services:
       - LM_STUDIO_BASE_URL=${SKI_LM_STUDIO_BASE_URL:-http://192.168.178.90:1234/v1}
     volumes:
       - /mnt/28bots_core/Obsidian_Vault:/mnt/ski-vault:rw
+      - ./src/openclaw:/app
+    working_dir: /app
+    # FIX: Hält den Container am Leben, bis du npm start aufrufst
+    command: ["tail", "-f", "/dev/null"]
     mem_limit: 512m
     restart: unless-stopped
     networks:
       - deer-flow
 
   # ── Hermes Orchestrator (v0.7.0) ──
-
   hermes:
     image: ubuntu:22.04
     container_name: ski-hermes
     ports:
-      - "9377:9377"  # Camofox anti-detection browser (new in v0.7)
+      - "9377:9377"
     environment:
       - HERMES_DEFAULT_PROFILE=${SKI_HERMES_DEFAULT_PROFILE:-tiferet-beta}
       - LM_STUDIO_BASE_URL=${SKI_LM_STUDIO_BASE_URL:-http://192.168.178.90:1234/v1}
@@ -95,13 +94,14 @@ services:
     volumes:
       - /mnt/28bots_core/Obsidian_Vault:/mnt/ski-vault:rw
       - hermes-data:/var/lib/hermes
+    # FIX: Hält das nackte Ubuntu am Leben, damit du 'docker exec' nutzen kannst
+    command: ["tail", "-f", "/dev/null"]
     mem_limit: 1536m
     restart: unless-stopped
     networks:
       - deer-flow
 
-  # ── Agent Zero — Task Hierarchy ──
-
+  # ── Agent Zero — Task Hierarchy & Orchestrator ──
   agent-zero:
     image: frdel/agent-zero:latest
     container_name: ski-agent-zero
@@ -111,15 +111,14 @@ services:
       - LM_STUDIO_BASE_URL=${SKI_LM_STUDIO_BASE_URL:-http://192.168.178.90:1234/v1}
     volumes:
       - /mnt/28bots_core/Obsidian_Vault:/mnt/ski-vault:rw
+      # NEU: Agent Zero bekommt Zugriff auf Docker, um andere Container zu steuern!
+      - /var/run/docker.sock:/var/run/docker.sock
     mem_limit: 1g
     restart: unless-stopped
     networks:
       - deer-flow
 
   # ── Auto Research Monitor ──
-  # Watches experiment results from the vault and provides a simple dashboard
-  # The actual Auto Research loop runs on the HOST (needs GPU)
-
   autoresearch-monitor:
     image: python:3.12-slim
     container_name: ski-autoresearch-monitor
@@ -150,12 +149,11 @@ services:
                           print(f'[exp {exp.get(\"id\",\"?\")}] {exp.get(\"description\",\"?\")[:60]} | val_bpb={exp.get(\"val_bpb\",\"N/A\")} | {s}');
                       last = len(lines);
           except Exception as e:
-              print(f'[monitor] Error: {e}');
+              pass
           time.sleep(30);
       "
 
   # ── Milvus Vector Database ──
-
   milvus:
     image: milvusdb/milvus:latest
     container_name: ski-milvus
@@ -168,32 +166,11 @@ services:
     networks:
       - deer-flow
 
-# ── Networks ──
-
 networks:
   deer-flow:
     driver: bridge
     name: docker_deer-flow
 
-# ── Volumes ──
-
 volumes:
   hermes-data:
   milvus-data:
-
-# ── Resource Notes ──
-# Total memory allocated: ~8.5 GB
-#   deerflow-langgraph:  2.0 GB
-#   deerflow-gateway:    0.5 GB
-#   deerflow-frontend:   0.5 GB
-#   deerflow-nginx:      0.25 GB
-#   openclaw:            0.5 GB
-#   hermes:              1.5 GB  (increased for v0.7 Camofox + memory plugins)
-#   agent-zero:          1.0 GB
-#   autoresearch-mon:    0.25 GB
-#   milvus:              2.0 GB
-#
-# With 9GB VM RAM, ~0.5 GB remains for the OS. INSUFFICIENT.
-# RECOMMENDATION: Increase VM RAM to 16GB in Hyper-V settings.
-#
-# Hermes v0.7 new port: 9377 (Camofox anti-detection browser)
