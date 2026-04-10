@@ -172,54 +172,45 @@ See [docs/DESIGN_ISSUES.md](docs/DESIGN_ISSUES.md) for full details.
 
 ## Getting Started
 
-### Automatische Installation (Empfohlen)
+### Schnellstart (ohne Git — eine ZIP-Datei)
 
-Um die Ubuntu-VM vollständig zu provisionieren (inkl. Docker, SMB-Mounts, Container und Hermes), nutze das mitgelieferte Master-Skript.
+1. Lade [`SKI_Deployment_Pack.zip`](SKI_Deployment_Pack.zip) aus diesem Repository herunter
+2. Entpacke auf dem Windows-Host (z.B. nach `C:\SKI_Setup`)
+3. Lies die enthaltene `README.md` — dort steht alles Schritt für Schritt
 
-1. Navigiere in den VM-Bootstrap-Ordner:
-   ```bash
-   cd vault/SKI_Bootstrap_Opus/vm/
-   ```
-2. Mache das Master-Skript ausführbar:
-   ```bash
-   chmod +x install_ski_vm.sh
-   ```
-3. Führe das Skript **als normaler User (nicht als root/sudo)** aus:
-   ```bash
-   ./install_ski_vm.sh
-   ```
+**Kurzfassung: Zwei Einstiegspunkte, einer pro Maschine:**
 
-Das Skript führt dich interaktiv durch alle nötigen Schritte und fragt Root-Rechte nur dann an, wenn sie explizit benötigt werden.
+| Maschine | Einstiegspunkt | Was es tut |
+|----------|---------------|------------|
+| **Windows Host** | `SKI_Installer.ps1` | Ordner, SMB-Share, Firewall, VM, AutoResearch |
+| **Ubuntu VM** | `install_ski_vm.sh` | Pakete, Docker, Container, Hermes — alles interaktiv |
 
-### Schnellstart für Windows (Ohne Git)
+#### Schritt 1: Host einrichten (Windows PowerShell als Admin)
 
-1. Lade die Datei `SKI_Deployment_Pack.zip` direkt hier aus dem Repository herunter.
-2. Entpacke die ZIP-Datei auf deinem Windows-Host (z.B. nach `C:\SKI_Setup`).
-3. Öffne PowerShell als Administrator und navigiere in den Ordner:
-   ```powershell
-   cd "C:\SKI_Setup\vault\SKI_Bootstrap_Opus\host\"
-   Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process
-   ```
-4. Führe das Setup-Skript aus:
-   ```powershell
-   .\06_ssh_vm_setup.ps1
-   ```
+```powershell
+cd "C:\SKI_Setup\vault\SKI_Bootstrap_Opus"
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process
+.\SKI_Installer.ps1
+```
 
-### Manuelle Installation
+Im Menü: `1` = Full Install (Host), dann `4` = Remote VM Setup (per SSH)
+
+#### Schritt 2: VM einrichten (Ubuntu — direkt oder remote)
+
+Remote vom Host (Option `4` im Menü) oder direkt auf der VM:
 
 ```bash
-# Clone
-git clone https://github.com/IdomyownGPT/28BotsTST.git
-cd 28BotsTST
+cd /mnt/28bots_core/Obsidian_Vault/SKI_Bootstrap_Opus/vm
+chmod +x install_ski_vm.sh
+./install_ski_vm.sh
+```
 
-# Configure
-cp .env.example .env
-nano .env  # Set your values
+Das Skript führt interaktiv durch alle Schritte. Nichts passiert ohne Bestätigung.
 
-# Deploy (on the VM)
-docker compose up -d
+#### Schritt 3: Verifizieren
 
-# Verify
+```bash
+cd ~/28BotsTST
 ./scripts/verify_all.sh
 ```
 
