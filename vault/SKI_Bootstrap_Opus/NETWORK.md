@@ -36,8 +36,61 @@
 | Agent Zero Web-UI | `http://192.168.178.122:8080` |
 | Hermes Health | `http://192.168.178.122:9377/health` |
 | Hermes Profile | `http://192.168.178.122:9377/profiles` |
+| Hermes Tools | `http://192.168.178.122:9377/tools` |
+| Hermes Sessions | `http://192.168.178.122:9377/sessions` |
+| Hermes Memory Search | `http://192.168.178.122:9377/memory/search?q=...` |
 | OpenClaw Health | `http://192.168.178.122:3000/health` |
 | OpenClaw-2 Health | `http://192.168.178.122:3001/health` |
+
+## Hermes Agent — Endpoints (Port 9377)
+
+| Method | Route | Zweck |
+|---|---|---|
+| GET | `/health` | LM Studio Status, gebundenes Modell, Tool-Calling an/aus |
+| GET | `/profiles` | 3x3 Sephirotische Profil-Matrix |
+| GET | `/tools` | Aktives Toolset (OpenAI Tool-Schema) |
+| GET | `/sessions` | Alle bekannten Session-IDs |
+| GET | `/sessions/<id>` | Session-History (JSON-L aus Vault) |
+| DELETE | `/sessions/<id>` | Session loeschen (nicht `default`) |
+| GET | `/memory/search?q=...` | ripgrep ueber den Vault |
+| POST | `/chat` | Einfacher Chat mit optionaler `session_id` |
+| POST | `/v1/chat/completions` | OpenAI-kompatibel, Tool-Calling + Streaming |
+
+### Hermes Memory Layout (im Obsidian Vault)
+
+```
+D:\28Bots_Core\hermes\           (Host)
+/mnt/28bots_core/hermes/         (VM)
+/app/vault/                       (Container-Mount)
+    sessions/
+        2026-04-12/
+            default.jsonl
+            <session_id>.jsonl
+    memory/
+        2026-04/
+            <slug>.md             (YAML-frontmatter + Markdown)
+```
+
+### Standard-Tools im Proxy
+
+| Tool | Signatur | Zweck |
+|---|---|---|
+| `vault_read` | `(path)` | Liest Datei aus `/app/vault`, max. 64 KB |
+| `vault_search` | `(query)` | ripgrep ueber den Vault (20 Treffer max) |
+| `vault_write` | `(title, content, tags?)` | Schreibt Markdown-Notiz in `memory/<YYYY-MM>/` |
+| `profile_switch` | `(name)` | Wechselt Hermes-Profil fuer aktuelle Anfrage |
+
+### Model Pinning (runtime/.env)
+
+```
+SKI_HERMES_MODEL=hermes-4.3-36b
+SKI_HERMES_MODEL_FALLBACK=hermes-3-llama-3.1-8b
+SKI_HERMES_TOOL_CALLING=true
+SKI_HERMES_MAX_TOOL_ROUNDS=3
+SKI_HERMES_HISTORY_LIMIT=20
+```
+
+Siehe `docs/HERMES_MODEL_SETUP.md` fuer das Laden des Modells in LM Studio.
 
 ## Container-zu-Container (ski-net intern)
 

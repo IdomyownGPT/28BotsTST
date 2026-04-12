@@ -13,7 +13,40 @@
 # Logs:   docker compose logs -f
 # ═══════════════════════════════════════════════════════════════
 
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
+  # --- Hermes Agent (Reasoning & 3x3 Profile Matrix) ---
+  # Zuerst deklariert, weil Agent-Zero und OpenClaw davon abhaengen.
+  hermes-agent:
+    build:
+      context: ./agents/hermes-agent
+    container_name: ski-hermes-agent
+    ports:
+      - "9377:9377"
+    env_file: .env
+    volumes:
+      # Obsidian Vault Mount — Sessions & Memory direkt im Host-Vault
+      - /mnt/28bots_core/hermes:/app/vault
+      # Legacy-Pfade fuer Ruecklaufkompatibilitaet (optional, falls noch benutzt)
+      - ./hermes/memory:/app/memory
+      - ./hermes/data:/app/data
+    restart: unless-stopped
+    stop_grace_period: 10s
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9377/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging: *default-logging
+    networks:
+      - ski-net
+
   # --- Agent Zero (Orchestrator & Task Runner) ---
   agent-zero:
     build:
@@ -25,22 +58,11 @@ services:
     volumes:
       - ./agent-zero/workspace:/app/workspace
       - ./agent-zero/config:/app/config
+    depends_on:
+      hermes-agent:
+        condition: service_healthy
     restart: unless-stopped
-    networks:
-      - ski-net
-
-  # --- Hermes Agent (Reasoning & 3x3 Profile Matrix) ---
-  hermes-agent:
-    build:
-      context: ./agents/hermes-agent
-    container_name: ski-hermes-agent
-    ports:
-      - "9377:9377"
-    env_file: .env
-    volumes:
-      - ./hermes/memory:/app/memory
-      - ./hermes/data:/app/data
-    restart: unless-stopped
+    logging: *default-logging
     networks:
       - ski-net
 
@@ -54,7 +76,11 @@ services:
     env_file: .env
     volumes:
       - ./openclaw/data:/app/data
+    depends_on:
+      hermes-agent:
+        condition: service_healthy
     restart: unless-stopped
+    logging: *default-logging
     networks:
       - ski-net
 
@@ -70,7 +96,11 @@ services:
       - PORT=3001
     volumes:
       - ./openclaw-2/data:/app/data
+    depends_on:
+      hermes-agent:
+        condition: service_healthy
     restart: unless-stopped
+    logging: *default-logging
     networks:
       - ski-net
 

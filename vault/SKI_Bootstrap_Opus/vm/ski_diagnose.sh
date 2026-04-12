@@ -69,6 +69,16 @@ else
     fail "docker-compose.yml FEHLT in $RUNTIME_DIR"
 fi
 
+# Hermes-spezifischer Vault-Pfad fuer Sessions/Memory
+HERMES_VAULT="/mnt/28bots_core/hermes"
+if [ -d "$HERMES_VAULT" ]; then
+    SESS=$(find "$HERMES_VAULT/sessions" -name '*.jsonl' 2>/dev/null | wc -l)
+    MEMS=$(find "$HERMES_VAULT/memory" -name '*.md' 2>/dev/null | wc -l)
+    ok "Hermes Vault vorhanden ($SESS Sessions, $MEMS Memos)"
+else
+    warn "Hermes Vault fehlt: $HERMES_VAULT (wird beim Container-Start erzeugt)"
+fi
+
 # ═══════════════════════════════════════════════════════════════
 # 4. Container Status
 # ═══════════════════════════════════════════════════════════════
@@ -140,7 +150,7 @@ echo ""
 printf "  ${BOLD}%-25s %-10s %-30s${NC}\n" "SERVICE" "STATUS" "ANTWORT"
 printf "  ${GRAY}%-25s %-10s %-30s${NC}\n" "-------------------------" "----------" "------------------------------"
 
-for entry in "http://localhost:8080:Agent-Zero-UI" "http://localhost:9377/health:Hermes-Health" "http://localhost:9377/profiles:Hermes-Profiles" "http://localhost:3000/health:OpenClaw-Health" "http://localhost:3001/health:OpenClaw-2-Health" "http://$HOST_IP:1234/v1/models:LM-Studio-API"; do
+for entry in "http://localhost:8080:Agent-Zero-UI" "http://localhost:9377/health:Hermes-Health" "http://localhost:9377/profiles:Hermes-Profiles" "http://localhost:9377/tools:Hermes-Tools" "http://localhost:9377/sessions:Hermes-Sessions" "http://localhost:3000/health:OpenClaw-Health" "http://localhost:3001/health:OpenClaw-2-Health" "http://$HOST_IP:1234/v1/models:LM-Studio-API"; do
     url="${entry%:*:*}"
     # Handle URLs with multiple colons properly
     name="${entry##*:}"
